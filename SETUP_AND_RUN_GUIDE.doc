@@ -1,0 +1,147 @@
+MQTT-Based Real-Time Student Notification and Academic Announcement System
+
+============================================================
+1) WHAT IS INCLUDED IN THIS ROOT FOLDER
+============================================================
+
+1. backend/            -> Node.js + Express API + MQTT publisher + scheduler + FCM hook
+2. web-dashboard/      -> React web app for Admin and Teacher
+3. mobile-app/         -> Expo React Native app for Student
+4. database.sql        -> MySQL schema + sample seed users/data
+5. SETUP_AND_RUN_GUIDE.doc -> This run guide
+
+
+============================================================
+2) REQUIRED INSTALLATIONS (PREREQUISITES)
+============================================================
+
+Install these before running:
+
+1. Node.js LTS (includes npm)
+2. XAMPP (for MySQL)
+3. Eclipse Mosquitto MQTT Broker
+4. Expo Go app on Android/iOS phone (for mobile testing)
+5. (Optional for FCM) Firebase Project + Service Account JSON
+
+
+============================================================
+3) IMPORTANT PORTS
+============================================================
+
+Backend API (Node/Express):         http://localhost:5000
+Web Dashboard (Vite React):         http://localhost:5173
+Mobile App (Expo Dev Server):       http://localhost:8081 (typical Metro port)
+MySQL (XAMPP):                      3306
+Mosquitto MQTT TCP:                 1883
+Mosquitto MQTT over WebSocket:      9001 (for React Native MQTT ws://)
+
+
+============================================================
+4) DATABASE SETUP (XAMPP MYSQL)
+============================================================
+
+1. Start Apache and MySQL in XAMPP Control Panel.
+2. Open phpMyAdmin.
+3. Import the file: database.sql
+4. This creates:
+   - student_notification_system DB
+   - users, subjects, sections, notifications, student_subjects,
+     notification_reads, fcm_tokens tables
+   - sample accounts
+
+Sample Accounts:
+Admin:   admin@school.com    / admin123
+Teacher: teacher1@school.com / teacher123
+Student: student1@school.com / student123
+
+
+============================================================
+5) MOSQUITTO SETUP
+============================================================
+
+Use Mosquitto with both TCP and WebSocket listeners.
+
+Example mosquitto.conf entries:
+
+listener 1883
+protocol mqtt
+
+listener 9001
+protocol websockets
+
+Then restart Mosquitto.
+
+
+============================================================
+6) BACKEND SETUP & RUN
+============================================================
+
+1. Go to backend folder.
+2. Copy .env.example to .env
+3. Update DB and MQTT values if needed.
+4. Run:
+
+   npm install -----
+   npm run dev
+
+Health check:
+GET http://localhost:5000/api/health
+
+Optional FCM setup:
+- Put Firebase service account JSON as:
+  backend/firebase-service-account.json
+
+
+============================================================
+7) WEB DASHBOARD SETUP & RUN
+============================================================
+
+1. Go to web-dashboard folder
+2. Run:
+
+   npm install
+   npm run dev
+
+3. Open browser:
+   http://localhost:5173
+
+Use Admin account to create teacher/section/subject.
+Use Teacher account to send instant or scheduled notifications.
+
+
+============================================================
+8) MOBILE APP SETUP & RUN (EXPO GO)
+============================================================
+
+1. Go to mobile-app/src/config.js
+2. Update values to your PC LAN IP:
+
+   API_URL = 'http://<YOUR_PC_IP>:5000/api'
+   MQTT_BROKER_WS_URL = 'ws://<YOUR_PC_IP>:9001'
+
+3. Go to mobile-app folder and run:
+
+   npm install
+   npm start
+
+4. Scan QR code with Expo Go app.
+5. Login as student account.
+
+
+============================================================
+9) HOW THE SYSTEM FLOWS
+============================================================
+
+Teacher sends notification -> Backend saves to DB ->
+Backend publishes MQTT topic school/{section}/{subject} ->
+Online students receive real-time ->
+Backend also sends push notification through FCM hook (if configured).
+
+
+============================================================
+10) NOTES
+============================================================
+
+1. Passwords in this project are plain text by request.
+2. For production, use password hashing + HTTPS + stricter token security.
+3. If mobile cannot connect, check firewall and ensure phone + PC are same Wi-Fi.

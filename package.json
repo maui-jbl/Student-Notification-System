@@ -1,0 +1,17 @@
+{
+  "name": "mqtt-student-notification-system-root",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Root helper scripts for the MQTT-Based Real-Time Student Notification and Academic Announcement System",
+  "scripts": {
+    "install:all": "npm install --prefix backend && npm install --prefix web-dashboard && npm install --prefix mobile-app",
+    "backend": "npm run dev --prefix backend",
+    "web": "npm run dev --prefix web-dashboard",
+    "mobile": "npm start --prefix mobile-app",
+    "build:web": "npm run build --prefix web-dashboard",
+    "check:backend": "node --check backend/src/server.js"
+  },
+  "dependencies": {
+    "mqtt": "^5.15.1"
+  }
+}
