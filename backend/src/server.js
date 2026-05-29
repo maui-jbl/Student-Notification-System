@@ -19,7 +19,8 @@ app.use(express.json());
 app.get('/api/health', async (_req, res) => {
   try {
     await pool.query('SELECT 1');
-    res.json({ status: 'ok', mqttConnected: mqttClient.connected });
+    const mqttConnected = mqttClient && mqttClient.connected;
+    res.json({ status: 'ok', mqttConnected: mqttConnected || false });
   } catch (error) {
     res.status(500).json({ status: 'error', error: error.message });
   }

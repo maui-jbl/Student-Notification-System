@@ -17,8 +17,9 @@ router.post('/login', async (req, res) => {
       ? (await pool.query('SELECT section_name FROM sections WHERE id=? LIMIT 1', [user.section_id]))[0][0]?.section_name || null
       : null;
 
+    const fullName = [user.first_name, user.middle_initial ? user.middle_initial + '.' : '', user.last_name].filter(Boolean).join(' ');
     const token = jwt.sign(
-      { id: user.id, role: user.role, name: user.name, section_id: user.section_id, section_name: sectionName },
+      { id: user.id, role: user.role, name: fullName, section_id: user.section_id, section_name: sectionName },
       process.env.JWT_SECRET || 'super_secret_jwt_key',
       { expiresIn: '1d' }
     );
@@ -27,7 +28,7 @@ router.post('/login', async (req, res) => {
       token,
       user: {
         id: user.id,
-        name: user.name,
+        name: fullName,
         role: user.role,
         email: user.email,
         section_id: user.section_id,

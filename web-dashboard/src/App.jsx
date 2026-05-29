@@ -159,16 +159,24 @@ function LoginPage({ onLoginSuccess, onBackClick }) {
 
 // Dashboard Component
 function Dashboard({ token, user, onLogout }) {
-  const [teachers, setTeachers] = useState([]);
+const [teachers, setTeachers] = useState([]);
   const [sections, setSections] = useState([]);
   const [subjects, setSubjects] = useState([]);
+  const [courses, setCourses] = useState([]);
   const [history, setHistory] = useState([]);
   const [message, setMessage] = useState('');
   const [activeTab, setActiveTab] = useState('dashboard');
 
-  const [teacherForm, setTeacherForm] = useState({ name: '', email: '', password: '' });
-  const [sectionName, setSectionName] = useState('BSIT2A');
+const [teacherForm, setTeacherForm] = useState({ first_name: '', last_name: '', middle_initial: '', email: '', password: '' });
+  const [teacherFormSubjects, setTeacherFormSubjects] = useState([]);
+  const [editingTeacher, setEditingTeacher] = useState(null);
+  const [teacherSubjects, setTeacherSubjects] = useState([]);
+  const [allSubjects, setAllSubjects] = useState([]);
+const [sectionForm, setSectionForm] = useState({ section_name: '', course_id: '' });
+  const [editingSection, setEditingSection] = useState(null);
   const [subjectForm, setSubjectForm] = useState({ subject_name: 'WebDev', teacher_id: '' });
+  const [courseForm, setCourseForm] = useState({ course_name: '', course_code: '' });
+  const [editingCourse, setEditingCourse] = useState(null);
   const [notifForm, setNotifForm] = useState({
     title: '',
     message: '',
@@ -180,35 +188,32 @@ function Dashboard({ token, user, onLogout }) {
 
   const headers = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token]);
 
-  const notify = (msg, isError = false) => {
+  const notify = (msg) => {
     setMessage(msg);
     setTimeout(() => setMessage(''), 5000);
   };
 
-  useEffect(() => {
-    if (user?.role === 'admin') {
-      loadAdminData();
-    } else if (user?.role === 'teacher') {
-      loadTeacherData();
-    }
-  }, [user]);
-
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const loadAdminData = async () => {
     try {
-      const [t, s, sub] = await Promise.all([
+      const [t, s, sub, c] = await Promise.all([
         axios.get(`${API}/admin/teachers`, { headers }),
         axios.get(`${API}/admin/sections`, { headers }),
         axios.get(`${API}/admin/subjects`, { headers }),
+        axios.get(`${API}/admin/courses`, { headers }),
       ]);
       setTeachers(t.data);
       setSections(s.data);
       setSubjects(sub.data);
-    } catch (error) {
-      console.error('Error loading admin data:', error);
-      notify('Failed to load data', true);
+      setAllSubjects(sub.data);
+      setCourses(c.data);
+    } catch (err) {
+      console.error('loadAdminData error:', err.response?.data || err.message);
+      notify('Failed to load data: ' + (err.response?.data?.message || err.message));
     }
   };
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const loadTeacherData = async () => {
     try {
       const [sec, mySub, his] = await Promise.all([
@@ -219,33 +224,92 @@ function Dashboard({ token, user, onLogout }) {
       setSections(sec.data);
       setSubjects(mySub.data);
       setHistory(his.data);
-    } catch (error) {
-      console.error('Error loading teacher data:', error);
-      notify('Failed to load data', true);
+    } catch (err) {
+      console.error('Error loading teacher data:', err);
+      notify('Failed to load data');
     }
   };
+
+  useEffect(() => {
+    if (user?.role === 'admin') {
+      loadAdminData();
+    } else if (user?.role === 'teacher') {
+      loadTeacherData();
+    }
+  }, [user, loadAdminData, loadTeacherData]);
 
   const createTeacher = async (e) => {
     e.preventDefault();
     try {
-      await axios.post(`${API}/admin/teachers`, teacherForm, { headers });
+      const { data: created } = await axios.post(`${API}/admin/teachers`, teacherForm, { headers });
+      if (teacherFormSubjects.length > 0) {
+        await axios.put(`${API}/admin/teachers/${created.insertId}/subjects`, { subject_ids: teacherFormSubjects }, { headers });
+      }
       notify('✓ Teacher created successfully');
-      setTeacherForm({ name: '', email: '', password: '' });
+      setTeacherForm({ first_name: '', last_name: '', middle_initial: '', email: '', password: '' });
+      setTeacherFormSubjects([]);
       loadAdminData();
-    } catch (error) {
-      notify('Failed to create teacher', true);
+    } catch (err) {
+      console.error('Create error:', err.response?.data || err.message);
+      notify('Failed to create teacher: ' + (err.response?.data?.message || err.message));
     }
+  };
+
+  const updateTeacher = async (e) => {
+    e.preventDefault();
+    if (!confirm('Are you sure you want to save changes to this teacher?')) return;
+    try {
+      const updateData = { ...editingTeacher };
+      if (!updateData.password || updateData.password === '') {
+        delete updateData.password;
+      }
+      await axios.put(`${API}/admin/teachers/${editingTeacher.id}`, updateData, { headers });
+      await axios.put(`${API}/admin/teachers/${editingTeacher.id}/subjects`, { subject_ids: teacherSubjects }, { headers });
+      notify('✓ Teacher updated successfully');
+      setEditingTeacher(null);
+      loadAdminData();
+    } catch (err) {
+      console.error('Update error:', err.response?.data || err.message);
+      notify('Failed to update teacher: ' + (err.response?.data?.message || err.message));
+    }
+  };
+
+  const deleteTeacher = async (id) => {
+    if (!confirm('Are you sure you want to delete this teacher? All their assigned subjects will be unassigned.')) return;
+    try {
+      await axios.delete(`${API}/admin/teachers/${id}`, { headers });
+      notify('✓ Teacher deleted successfully');
+      loadAdminData();
+    } catch (err) {
+      console.error('Delete error:', err.response?.data || err.message);
+      notify('Failed to delete teacher: ' + (err.response?.data?.message || err.message));
+    }
+  };
+
+  const openEditModal = async (teacher) => {
+    setEditingTeacher({ ...teacher, password: '' });
+    const [subjRes, allSubjRes] = await Promise.all([
+      axios.get(`${API}/admin/teachers/${teacher.id}/subjects`, { headers }),
+      axios.get(`${API}/admin/subjects`, { headers }),
+    ]);
+    setTeacherSubjects(subjRes.data.map(s => s.id));
+    setAllSubjects(allSubjRes.data);
+  };
+
+  const getFullName = (t) => {
+    return [t.first_name, t.middle_initial ? t.middle_initial + '.' : '', t.last_name].filter(Boolean).join(' ');
   };
 
   const createSection = async (e) => {
     e.preventDefault();
     try {
-      await axios.post(`${API}/admin/sections`, { section_name: sectionName }, { headers });
+      await axios.post(`${API}/admin/sections`, sectionForm, { headers });
       notify('✓ Section created successfully');
-      setSectionName('');
+      setSectionForm({ section_name: '', course_id: '' });
       loadAdminData();
-    } catch (error) {
-      notify('Failed to create section', true);
+    } catch (err) {
+      console.error('Create section error:', err.response?.data || err.message);
+      notify('Failed to create section: ' + (err.response?.data?.message || err.message));
     }
   };
 
@@ -256,9 +320,83 @@ function Dashboard({ token, user, onLogout }) {
       notify('✓ Subject created successfully');
       setSubjectForm({ subject_name: '', teacher_id: '' });
       loadAdminData();
-    } catch (error) {
-      notify('Failed to create subject', true);
+    } catch (err) {
+      console.error('Create subject error:', err.response?.data || err.message);
+      notify('Failed to create subject: ' + (err.response?.data?.message || err.message));
     }
+  };
+
+  const createCourse = async (e) => {
+    e.preventDefault();
+    try {
+      await axios.post(`${API}/admin/courses`, courseForm, { headers });
+      notify('✓ Course created successfully');
+      setCourseForm({ course_name: '', course_code: '' });
+      loadAdminData();
+    } catch (err) {
+      console.error('Create course error:', err.response?.data || err.message);
+      notify('Failed to create course: ' + (err.response?.data?.message || err.message));
+    }
+  };
+
+  const updateCourse = async (e) => {
+    e.preventDefault();
+    if (!confirm('Are you sure you want to save changes to this course?')) return;
+    try {
+      await axios.put(`${API}/admin/courses/${editingCourse.id}`, editingCourse, { headers });
+      notify('✓ Course updated successfully');
+      setEditingCourse(null);
+      loadAdminData();
+    } catch (err) {
+      console.error('Update course error:', err.response?.data || err.message);
+      notify('Failed to update course: ' + (err.response?.data?.message || err.message));
+    }
+  };
+
+  const deleteCourse = async (id) => {
+    if (!confirm('Are you sure you want to delete this course? All subjects in this course will be unassigned.')) return;
+    try {
+      await axios.delete(`${API}/admin/courses/${id}`, { headers });
+      notify('✓ Course deleted successfully');
+      loadAdminData();
+    } catch (err) {
+      console.error('Delete course error:', err.response?.data || err.message);
+      notify('Failed to delete course: ' + (err.response?.data?.message || err.message));
+    }
+  };
+
+  const openEditCourseModal = (course) => {
+    setEditingCourse({ ...course });
+  };
+
+  const updateSection = async (e) => {
+    e.preventDefault();
+    if (!confirm('Are you sure you want to save changes to this section?')) return;
+    try {
+      await axios.put(`${API}/admin/sections/${editingSection.id}`, editingSection, { headers });
+      notify('✓ Section updated successfully');
+      setEditingSection(null);
+      loadAdminData();
+    } catch (err) {
+      console.error('Update section error:', err.response?.data || err.message);
+      notify('Failed to update section: ' + (err.response?.data?.message || err.message));
+    }
+  };
+
+  const deleteSection = async (id) => {
+    if (!confirm('Are you sure you want to delete this section? All students in this section will be unassigned.')) return;
+    try {
+      await axios.delete(`${API}/admin/sections/${id}`, { headers });
+      notify('✓ Section deleted successfully');
+      loadAdminData();
+    } catch (err) {
+      console.error('Delete section error:', err.response?.data || err.message);
+      notify('Failed to delete section: ' + (err.response?.data?.message || err.message));
+    }
+  };
+
+  const openEditSectionModal = (section) => {
+    setEditingSection({ ...section });
   };
 
   const sendNotif = async (e) => {
@@ -282,8 +420,8 @@ function Dashboard({ token, user, onLogout }) {
         scheduled_at: '',
       });
       loadTeacherData();
-    } catch (error) {
-      notify('Failed to send notification', true);
+    } catch {
+      notify('Failed to send notification');
     }
   };
 
@@ -307,28 +445,34 @@ function Dashboard({ token, user, onLogout }) {
           >
             📊 Dashboard
           </button>
-          {user?.role === 'admin' && (
-            <>
-              <button
-                className={`tab ${activeTab === 'teachers' ? 'active' : ''}`}
-                onClick={() => setActiveTab('teachers')}
-              >
-                👨‍🏫 Manage Teachers
-              </button>
-              <button
-                className={`tab ${activeTab === 'sections' ? 'active' : ''}`}
-                onClick={() => setActiveTab('sections')}
-              >
-                📚 Manage Sections
-              </button>
-              <button
-                className={`tab ${activeTab === 'subjects' ? 'active' : ''}`}
-                onClick={() => setActiveTab('subjects')}
-              >
-                🎓 Manage Subjects
-              </button>
-            </>
-          )}
+{user?.role === 'admin' && (
+             <>
+               <button
+                 className={`tab ${activeTab === 'teachers' ? 'active' : ''}`}
+                 onClick={() => setActiveTab('teachers')}
+               >
+                 👨‍🏫 Manage Teachers
+               </button>
+               <button
+                 className={`tab ${activeTab === 'courses' ? 'active' : ''}`}
+                 onClick={() => setActiveTab('courses')}
+               >
+                 📘 Manage Courses
+               </button>
+               <button
+                 className={`tab ${activeTab === 'sections' ? 'active' : ''}`}
+                 onClick={() => setActiveTab('sections')}
+               >
+                 📚 Manage Sections
+               </button>
+               <button
+                 className={`tab ${activeTab === 'subjects' ? 'active' : ''}`}
+                 onClick={() => setActiveTab('subjects')}
+               >
+                 🎓 Manage Subjects
+               </button>
+             </>
+           )}
           {user?.role === 'teacher' && (
             <button
               className={`tab ${activeTab === 'notifications' ? 'active' : ''}`}
@@ -414,61 +558,109 @@ function Dashboard({ token, user, onLogout }) {
                 <form onSubmit={createTeacher}>
                   <div className="form-row">
                     <div className="form-group">
-                      <label>Teacher Name</label>
+                      <label>First Name</label>
                       <input
                         type="text"
-                        placeholder="Enter teacher name"
-                        value={teacherForm.name}
-                        onChange={(e) => setTeacherForm({ ...teacherForm, name: e.target.value })}
+                        placeholder="Enter first name"
+                        value={teacherForm.first_name}
+                        onChange={(e) => setTeacherForm({ ...teacherForm, first_name: e.target.value })}
                         required
                       />
                     </div>
                     <div className="form-group">
-                      <label>Email</label>
+                      <label>Last Name</label>
                       <input
-                        type="email"
-                        placeholder="Enter email"
-                        value={teacherForm.email}
-                        onChange={(e) => setTeacherForm({ ...teacherForm, email: e.target.value })}
+                        type="text"
+                        placeholder="Enter last name"
+                        value={teacherForm.last_name}
+                        onChange={(e) => setTeacherForm({ ...teacherForm, last_name: e.target.value })}
                         required
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label>Middle Initial</label>
+                      <input
+                        type="text"
+                        placeholder="M.I."
+                        maxLength="10"
+                        value={teacherForm.middle_initial}
+                        onChange={(e) => setTeacherForm({ ...teacherForm, middle_initial: e.target.value })}
                       />
                     </div>
                   </div>
                   <div className="form-group">
-                    <label>Password</label>
+                    <label>Email</label>
                     <input
-                      type="password"
-                      placeholder="Enter password"
-                      value={teacherForm.password}
-                      onChange={(e) => setTeacherForm({ ...teacherForm, password: e.target.value })}
+                      type="email"
+                      placeholder="Enter email"
+                      value={teacherForm.email}
+                      onChange={(e) => setTeacherForm({ ...teacherForm, email: e.target.value })}
                       required
                     />
                   </div>
-                  <button type="submit" className="btn-primary">Save Teacher</button>
-                </form>
+<div className="form-group">
+                     <label>Password</label>
+                     <input
+                       type="password"
+                       placeholder="Enter password"
+                       value={teacherForm.password}
+                       onChange={(e) => setTeacherForm({ ...teacherForm, password: e.target.value })}
+                       required
+                     />
+                   </div>
+<div className="form-group">
+                      <label>Assign Subjects</label>
+                      <div className="subject-checklist">
+                        {subjects.map((s) => (
+                          <label key={s.id} className="checkbox-label">
+                            <input
+                              type="checkbox"
+                              checked={teacherFormSubjects.includes(s.id)}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setTeacherFormSubjects([...teacherFormSubjects, s.id]);
+                                } else {
+                                  setTeacherFormSubjects(teacherFormSubjects.filter(id => id !== s.id));
+                                }
+                              }}
+                            />
+                            {s.subject_name}
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                   <button type="submit" className="btn-primary">Save Teacher</button>
+                 </form>
               </div>
 
               <div className="card mt-4">
                 <h3>Teachers List</h3>
                 {teachers.length > 0 ? (
-                  <table className="data-table">
-                    <thead>
-                      <tr>
-                        <th>ID</th>
-                        <th>Name</th>
-                        <th>Email</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {teachers.map((t) => (
-                        <tr key={t.id}>
-                          <td>{t.id}</td>
-                          <td>{t.name}</td>
-                          <td>{t.email}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+<table className="data-table">
+                     <thead>
+                       <tr>
+                         <th>ID</th>
+                         <th>Name</th>
+                         <th>Email</th>
+                         <th>Subjects</th>
+                         <th>Actions</th>
+                       </tr>
+                     </thead>
+                     <tbody>
+                       {teachers.map((t) => (
+                         <tr key={t.id}>
+                           <td>{t.id}</td>
+                           <td>{getFullName(t)}</td>
+                           <td>{t.email}</td>
+                           <td>{t.subjects || '—'}</td>
+                           <td>
+                             <button className="btn-sm btn-secondary" onClick={() => openEditModal(t)}>Edit</button>
+                             <button className="btn-sm btn-danger" onClick={() => deleteTeacher(t.id)}>Delete</button>
+                           </td>
+                         </tr>
+                       ))}
+                     </tbody>
+                   </table>
                 ) : (
                   <p className="no-data">No teachers found</p>
                 )}
@@ -476,54 +668,309 @@ function Dashboard({ token, user, onLogout }) {
             </section>
           )}
 
-          {/* Admin: Manage Sections */}
-          {user?.role === 'admin' && activeTab === 'sections' && (
-            <section className="form-section">
-              <h2>📚 Manage Sections</h2>
-              <div className="card">
-                <h3>Add New Section</h3>
-                <form onSubmit={createSection}>
+          {/* Edit Teacher Modal */}
+          {editingTeacher && (
+            <div className="modal-overlay">
+              <div className="modal">
+                <div className="modal-header">
+                  <h3>Edit Teacher</h3>
+                  <button className="modal-close" onClick={() => setEditingTeacher(null)}>×</button>
+                </div>
+                <form onSubmit={updateTeacher}>
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label>First Name</label>
+                      <input
+                        type="text"
+                        value={editingTeacher.first_name || ''}
+                        onChange={(e) => setEditingTeacher({ ...editingTeacher, first_name: e.target.value })}
+                        required
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label>Last Name</label>
+                      <input
+                        type="text"
+                        value={editingTeacher.last_name || ''}
+                        onChange={(e) => setEditingTeacher({ ...editingTeacher, last_name: e.target.value })}
+                        required
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label>Middle Initial</label>
+                      <input
+                        type="text"
+                        maxLength="10"
+                        value={editingTeacher.middle_initial || ''}
+                        onChange={(e) => setEditingTeacher({ ...editingTeacher, middle_initial: e.target.value })}
+                      />
+                    </div>
+                  </div>
                   <div className="form-group">
-                    <label>Section Name</label>
+                    <label>Email</label>
                     <input
-                      type="text"
-                      placeholder="e.g., BSIT 2A"
-                      value={sectionName}
-                      onChange={(e) => setSectionName(e.target.value)}
+                      type="email"
+                      value={editingTeacher.email || ''}
+                      onChange={(e) => setEditingTeacher({ ...editingTeacher, email: e.target.value })}
                       required
                     />
                   </div>
-                  <button type="submit" className="btn-primary">Save Section</button>
+                  <div className="form-group">
+                    <label>Password (leave blank to keep unchanged)</label>
+                    <input
+                      type="password"
+                      placeholder="New password"
+                      value={editingTeacher.password || ''}
+                      onChange={(e) => setEditingTeacher({ ...editingTeacher, password: e.target.value })}
+                    />
+                  </div>
+<div className="form-group">
+                     <label>Assign Subjects</label>
+                     <div className="subject-checklist">
+                       {allSubjects.map((s) => (
+                         <label key={s.id} className="checkbox-label">
+                           <input
+                             type="checkbox"
+                             checked={teacherSubjects.includes(s.id)}
+                             onChange={(e) => {
+                               if (e.target.checked) {
+                                 setTeacherSubjects([...teacherSubjects, s.id]);
+                               } else {
+                                 setTeacherSubjects(teacherSubjects.filter(id => id !== s.id));
+                               }
+                             }}
+                           />
+                           {s.subject_name}
+                         </label>
+                       ))}
+                     </div>
+                   </div>
+                  <div className="modal-actions">
+                    <button type="button" className="btn-secondary" onClick={() => setEditingTeacher(null)}>Cancel</button>
+                    <button type="submit" className="btn-primary">Save Changes</button>
+                  </div>
                 </form>
-              </div>
+</div>
+             </div>
+           )}
 
-              <div className="card mt-4">
-                <h3>Sections List</h3>
-                {sections.length > 0 ? (
-                  <table className="data-table">
-                    <thead>
-                      <tr>
-                        <th>ID</th>
-                        <th>Section Name</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {sections.map((s) => (
-                        <tr key={s.id}>
-                          <td>{s.id}</td>
-                          <td>{s.section_name}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                ) : (
-                  <p className="no-data">No sections found</p>
-                )}
-              </div>
-            </section>
-          )}
+           {/* Admin: Manage Courses */}
+           {user?.role === 'admin' && activeTab === 'courses' && (
+             <section className="form-section">
+               <h2>📘 Manage Courses</h2>
+               <div className="card">
+                 <h3>Add New Course</h3>
+                 <form onSubmit={createCourse}>
+                   <div className="form-row">
+                     <div className="form-group">
+                       <label>Course Name</label>
+                       <input
+                         type="text"
+                         placeholder="e.g., Bachelor of Science in IT"
+                         value={courseForm.course_name}
+                         onChange={(e) => setCourseForm({ ...courseForm, course_name: e.target.value })}
+                         required
+                       />
+                     </div>
+<div className="form-group">
+                        <label>Course Code</label>
+                        <input
+                          type="text"
+                          placeholder="e.g., BSIT"
+                          value={courseForm.course_code}
+                          onChange={(e) => setCourseForm({ ...courseForm, course_code: e.target.value })}
+                          required
+                        />
+                      </div>
+                   </div>
+                   <button type="submit" className="btn-primary">Save Course</button>
+                 </form>
+               </div>
 
-          {/* Admin: Manage Subjects */}
+               <div className="card mt-4">
+                 <h3>Courses List</h3>
+                 {courses.length > 0 ? (
+                   <table className="data-table">
+                     <thead>
+                       <tr>
+                         <th>ID</th>
+                         <th>Course Name</th>
+                         <th>Course Code</th>
+                         <th>Actions</th>
+                       </tr>
+                     </thead>
+                     <tbody>
+                       {courses.map((c) => (
+                         <tr key={c.id}>
+                           <td>{c.id}</td>
+                           <td>{c.course_name}</td>
+                           <td>{c.course_code}</td>
+                           <td>
+                             <button className="btn-sm btn-secondary" onClick={() => openEditCourseModal(c)}>Edit</button>
+                             <button className="btn-sm btn-danger" onClick={() => deleteCourse(c.id)}>Delete</button>
+                           </td>
+                         </tr>
+                       ))}
+                     </tbody>
+                   </table>
+                 ) : (
+                   <p className="no-data">No courses found</p>
+                 )}
+               </div>
+             </section>
+           )}
+
+           {/* Edit Course Modal */}
+           {editingCourse && (
+             <div className="modal-overlay">
+               <div className="modal">
+                 <div className="modal-header">
+                   <h3>Edit Course</h3>
+                   <button className="modal-close" onClick={() => setEditingCourse(null)}>×</button>
+                 </div>
+                 <form onSubmit={updateCourse}>
+                   <div className="form-group">
+                     <label>Course Name</label>
+                     <input
+                       type="text"
+                       value={editingCourse.course_name || ''}
+                       onChange={(e) => setEditingCourse({ ...editingCourse, course_name: e.target.value })}
+                       required
+                     />
+                   </div>
+<div className="form-group">
+                      <label>Course Code</label>
+                      <input
+                        type="text"
+                        placeholder="e.g., BSIT"
+                        value={editingCourse.course_code || ''}
+                        onChange={(e) => setEditingCourse({ ...editingCourse, course_code: e.target.value })}
+                        required
+                      />
+                    </div>
+                   <div className="modal-actions">
+                     <button type="button" className="btn-secondary" onClick={() => setEditingCourse(null)}>Cancel</button>
+                     <button type="submit" className="btn-primary">Save Changes</button>
+                   </div>
+                 </form>
+               </div>
+             </div>
+           )}
+
+{/* Admin: Manage Sections */}
+           {user?.role === 'admin' && activeTab === 'sections' && (
+             <section className="form-section">
+               <h2>📚 Manage Sections</h2>
+               <div className="card">
+                 <h3>Add New Section</h3>
+                 <form onSubmit={createSection}>
+                   <div className="form-row">
+                     <div className="form-group">
+                       <label>Section Name</label>
+                       <input
+                         type="text"
+                         placeholder="e.g., BSIT 2A"
+                         value={sectionForm.section_name}
+                         onChange={(e) => setSectionForm({ ...sectionForm, section_name: e.target.value })}
+                         required
+                       />
+                     </div>
+                     <div className="form-group">
+                       <label>Course</label>
+                       <select
+                         value={sectionForm.course_id}
+                         onChange={(e) => setSectionForm({ ...sectionForm, course_id: e.target.value })}
+                         required
+                       >
+                         <option value="">Select a course</option>
+                         {courses.map((c) => (
+                           <option key={c.id} value={c.id}>
+                             {c.course_code}
+                           </option>
+                         ))}
+                       </select>
+                     </div>
+                   </div>
+                   <button type="submit" className="btn-primary">Save Section</button>
+                 </form>
+               </div>
+
+               <div className="card mt-4">
+                 <h3>Sections List</h3>
+                 {sections.length > 0 ? (
+                   <table className="data-table">
+                     <thead>
+                       <tr>
+                         <th>ID</th>
+                         <th>Section Name</th>
+                         <th>Course</th>
+                         <th>Actions</th>
+                       </tr>
+                     </thead>
+                     <tbody>
+                       {sections.map((s) => (
+                         <tr key={s.id}>
+                           <td>{s.id}</td>
+                           <td>{s.section_name}</td>
+                           <td>{s.course_code || '—'}</td>
+                           <td>
+                             <button className="btn-sm btn-secondary" onClick={() => openEditSectionModal(s)}>Edit</button>
+                             <button className="btn-sm btn-danger" onClick={() => deleteSection(s.id)}>Delete</button>
+                           </td>
+                         </tr>
+                       ))}
+                     </tbody>
+                   </table>
+                 ) : (
+                   <p className="no-data">No sections found</p>
+                 )}
+               </div>
+             </section>
+           )}
+
+           {/* Edit Section Modal */}
+           {editingSection && (
+             <div className="modal-overlay">
+               <div className="modal">
+                 <div className="modal-header">
+                   <h3>Edit Section</h3>
+                   <button className="modal-close" onClick={() => setEditingSection(null)}>×</button>
+                 </div>
+                 <form onSubmit={updateSection}>
+                   <div className="form-group">
+                     <label>Section Name</label>
+                     <input
+                       type="text"
+                       value={editingSection.section_name || ''}
+                       onChange={(e) => setEditingSection({ ...editingSection, section_name: e.target.value })}
+                       required
+                     />
+                   </div>
+                   <div className="form-group">
+                     <label>Course</label>
+                     <select
+                       value={editingSection.course_id || ''}
+                       onChange={(e) => setEditingSection({ ...editingSection, course_id: e.target.value })}
+                       required
+                     >
+                       <option value="">Select a course</option>
+                       {courses.map((c) => (
+                         <option key={c.id} value={c.id}>
+                           {c.course_code}
+                         </option>
+                       ))}
+                     </select>
+                   </div>
+                   <div className="modal-actions">
+                     <button type="button" className="btn-secondary" onClick={() => setEditingSection(null)}>Cancel</button>
+                     <button type="submit" className="btn-primary">Save Changes</button>
+                   </div>
+                 </form>
+               </div>
+             </div>
+           )}
+
+           {/* Admin: Manage Subjects */}
           {user?.role === 'admin' && activeTab === 'subjects' && (
             <section className="form-section">
               <h2>🎓 Manage Subjects</h2>
@@ -551,7 +998,7 @@ function Dashboard({ token, user, onLogout }) {
                         <option value="">Select a teacher</option>
                         {teachers.map((t) => (
                           <option key={t.id} value={t.id}>
-                            {t.name}
+                            {getFullName(t)}
                           </option>
                         ))}
                       </select>

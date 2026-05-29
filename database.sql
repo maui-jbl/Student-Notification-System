@@ -3,12 +3,17 @@ USE student_notification_system;
 
 CREATE TABLE IF NOT EXISTS sections (
   id INT AUTO_INCREMENT PRIMARY KEY,
-  section_name VARCHAR(100) UNIQUE NOT NULL
+  section_name VARCHAR(100) NOT NULL,
+  course_id INT NULL,
+  FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE SET NULL,
+  UNIQUE KEY uq_section (section_name, course_id)
 );
 
 CREATE TABLE IF NOT EXISTS users (
   id INT AUTO_INCREMENT PRIMARY KEY,
-  name VARCHAR(100) NOT NULL,
+  first_name VARCHAR(50) NOT NULL,
+  last_name VARCHAR(50) NOT NULL,
+  middle_initial VARCHAR(10),
   role ENUM('admin','teacher','student') NOT NULL,
   email VARCHAR(120) UNIQUE NOT NULL,
   password VARCHAR(120) NOT NULL,
@@ -16,11 +21,19 @@ CREATE TABLE IF NOT EXISTS users (
   FOREIGN KEY (section_id) REFERENCES sections(id) ON DELETE SET NULL
 );
 
+CREATE TABLE IF NOT EXISTS courses (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  course_name VARCHAR(100) NOT NULL,
+  course_code VARCHAR(50) UNIQUE NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS subjects (
   id INT AUTO_INCREMENT PRIMARY KEY,
   subject_name VARCHAR(120) NOT NULL,
   teacher_id INT NULL,
-  FOREIGN KEY (teacher_id) REFERENCES users(id) ON DELETE SET NULL
+  course_id INT NULL,
+  FOREIGN KEY (teacher_id) REFERENCES users(id) ON DELETE SET NULL,
+  FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS student_subjects (
@@ -29,6 +42,15 @@ CREATE TABLE IF NOT EXISTS student_subjects (
   PRIMARY KEY (student_id, subject_id),
   FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE,
   FOREIGN KEY (subject_id) REFERENCES subjects(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS fcm_tokens (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  student_id INT NOT NULL,
+  fcm_token TEXT NOT NULL,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_student (student_id),
+  FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS notifications (
@@ -57,24 +79,18 @@ CREATE TABLE IF NOT EXISTS notification_reads (
   FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
-CREATE TABLE IF NOT EXISTS fcm_tokens (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  student_id INT NOT NULL,
-  fcm_token TEXT NOT NULL,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  UNIQUE KEY uq_student (student_id),
-  FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE
-);
+INSERT INTO courses(course_name, course_code) VALUES ('Bachelor of Science in Information Technology', 'BSIT'), ('Bachelor of Science in Computer Science', 'BSCS')
+ON DUPLICATE KEY UPDATE course_name=VALUES(course_name);
 
 INSERT INTO sections(section_name) VALUES ('BSIT2A'),('BSIT3B')
 ON DUPLICATE KEY UPDATE section_name=VALUES(section_name);
 
-INSERT INTO users(name, role, email, password, section_id) VALUES
-('Admin User','admin','admin@school.com','admin123',NULL),
-('Teacher One','teacher','teacher1@school.com','teacher123',NULL),
-('Student One','student','student1@school.com','student123',1),
-('Student Two','student','student2@school.com','student123',2)
-ON DUPLICATE KEY UPDATE name=VALUES(name);
+INSERT INTO users(first_name, last_name, middle_initial, role, email, password, section_id) VALUES
+ ('Admin', 'User', NULL, 'admin', 'admin@school.com', 'admin123', NULL),
+ ('Teacher', 'One', NULL, 'teacher', 'teacher1@school.com', 'teacher123', NULL),
+ ('Student', 'One', NULL, 'student', 'student1@school.com', 'student123', 1),
+ ('Student', 'Two', NULL, 'student', 'student2@school.com', 'student123', 2)
+ON DUPLICATE KEY UPDATE first_name=VALUES(first_name), last_name=VALUES(last_name), middle_initial=VALUES(middle_initial);
 
 INSERT INTO subjects(subject_name, teacher_id)
 SELECT 'WebDev', id FROM users WHERE email='teacher1@school.com'
