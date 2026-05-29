@@ -7,7 +7,7 @@ router.use(authenticate, authorize('admin'));
 
 router.get('/teachers', async (_req, res) => {
    try {
-     const [teachers] = await pool.query("SELECT id, first_name, last_name, middle_initial, email FROM users WHERE role='teacher'");
+     const [teachers] = await pool.query("SELECT id, first_name, last_name, middle_initial, email FROM users WHERE role='teacher' AND archived=0");
      const [subjects] = await pool.query('SELECT id, teacher_id, subject_name FROM subjects');
      
      const teachersWithSubjects = teachers.map(teacher => ({
@@ -42,18 +42,33 @@ router.put('/teachers/:id', async (req, res) => {
  });
 
 router.delete('/teachers/:id', async (req, res) => {
-  const conn = await pool.getConnection();
   try {
-    await conn.query('START TRANSACTION');
-    await conn.query('UPDATE subjects SET teacher_id=NULL WHERE teacher_id=?', [req.params.id]);
-    await conn.query('DELETE FROM users WHERE id=? AND role=?', [req.params.id, 'teacher']);
-    await conn.query('COMMIT');
-    res.json({ message: 'Teacher deleted' });
+    await pool.query('UPDATE subjects SET teacher_id=NULL WHERE teacher_id=?', [req.params.id]);
+    await pool.query("UPDATE users SET archived=1 WHERE id=? AND role='teacher'", [req.params.id]);
+    res.json({ message: 'Teacher archived' });
   } catch (error) {
-    await conn.query('ROLLBACK');
-    throw error;
-  } finally {
-    conn.release();
+    console.error('Archive teacher error:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+router.get('/teachers/archived', async (_req, res) => {
+  try {
+    const [rows] = await pool.query("SELECT id, first_name, last_name, middle_initial, email FROM users WHERE role='teacher' AND archived=1 ORDER BY id DESC");
+    res.json(rows);
+  } catch (error) {
+    console.error('Get archived teachers error:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+router.post('/teachers/:id/restore', async (req, res) => {
+  try {
+    await pool.query("UPDATE users SET archived=0 WHERE id=? AND role='teacher'", [req.params.id]);
+    res.json({ message: 'Teacher restored' });
+  } catch (error) {
+    console.error('Restore teacher error:', error);
+    res.status(500).json({ message: error.message });
   }
 });
 
@@ -99,10 +114,20 @@ router.post('/teachers', async (req, res) => {
 
 router.get('/sections', async (_req, res) => {
   try {
-    const [rows] = await pool.query('SELECT s.*, c.course_code FROM sections s LEFT JOIN courses c ON s.course_id = c.id ORDER BY s.id DESC');
+    const [rows] = await pool.query('SELECT s.*, c.course_code FROM sections s LEFT JOIN courses c ON s.course_id = c.id WHERE s.archived=0 ORDER BY s.id DESC');
     res.json(rows);
   } catch (error) {
     console.error('Get sections error:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+router.get('/sections/archived', async (_req, res) => {
+  try {
+    const [rows] = await pool.query('SELECT s.*, c.course_code FROM sections s LEFT JOIN courses c ON s.course_id = c.id WHERE s.archived=1 ORDER BY s.id DESC');
+    res.json(rows);
+  } catch (error) {
+    console.error('Get archived sections error:', error);
     res.status(500).json({ message: error.message });
   }
 });
@@ -130,19 +155,22 @@ router.put('/sections/:id', async (req, res) => {
 });
 
 router.delete('/sections/:id', async (req, res) => {
-  const conn = await pool.getConnection();
   try {
-    await conn.query('START TRANSACTION');
-    await conn.query('UPDATE users SET section_id=NULL WHERE section_id=?', [req.params.id]);
-    await conn.query('DELETE FROM sections WHERE id=?', [req.params.id]);
-    await conn.query('COMMIT');
-    res.json({ message: 'Section deleted' });
+    await pool.query("UPDATE sections SET archived=1 WHERE id=?", [req.params.id]);
+    res.json({ message: 'Section archived' });
   } catch (error) {
-    await conn.query('ROLLBACK');
-    console.error('Delete section error:', error);
+    console.error('Archive section error:', error);
     res.status(500).json({ message: error.message });
-  } finally {
-    conn.release();
+  }
+});
+
+router.post('/sections/:id/restore', async (req, res) => {
+  try {
+    await pool.query("UPDATE sections SET archived=0 WHERE id=?", [req.params.id]);
+    res.json({ message: 'Section restored' });
+  } catch (error) {
+    console.error('Restore section error:', error);
+    res.status(500).json({ message: error.message });
   }
 });
 
@@ -151,6 +179,18 @@ router.get('/subjects', async (_req, res) => {
     `SELECT s.*, CONCAT(u.first_name, ' ', u.last_name) AS teacher_name
      FROM subjects s
      LEFT JOIN users u ON s.teacher_id=u.id
+     WHERE s.archived=0
+     ORDER BY s.id DESC`
+  );
+  res.json(rows);
+});
+
+router.get('/subjects/archived', async (_req, res) => {
+  const [rows] = await pool.query(
+    `SELECT s.*, CONCAT(u.first_name, ' ', u.last_name) AS teacher_name
+     FROM subjects s
+     LEFT JOIN users u ON s.teacher_id=u.id
+     WHERE s.archived=1
      ORDER BY s.id DESC`
   );
   res.json(rows);
@@ -158,8 +198,16 @@ router.get('/subjects', async (_req, res) => {
 
 router.post('/subjects', async (req, res) => {
   const { subject_name, teacher_id } = req.body;
-  await pool.query('INSERT INTO subjects(subject_name,teacher_id) VALUES(?,?)', [subject_name, teacher_id || null]);
-  res.json({ message: 'Subject created' });
+  try {
+    await pool.query('INSERT INTO subjects(subject_name,teacher_id) VALUES(?,?)', [subject_name, teacher_id || null]);
+    res.json({ message: 'Subject created' });
+  } catch (error) {
+    if (error.code === 'ER_DUP_ENTRY') {
+      return res.status(409).json({ message: `Subject "${subject_name}" already exists` });
+    }
+    console.error('Create subject error:', error);
+    res.status(500).json({ message: error.message });
+  }
 });
 
 // Courses CRUD
@@ -204,6 +252,178 @@ router.delete('/courses/:id', async (req, res) => {
     res.status(500).json({ message: error.message });
   } finally {
     conn.release();
+  }
+});
+
+router.put('/subjects/:id', async (req, res) => {
+  const { subject_name, teacher_id } = req.body;
+  try {
+    await pool.query('UPDATE subjects SET subject_name=?, teacher_id=? WHERE id=?', [subject_name, teacher_id || null, req.params.id]);
+    res.json({ message: 'Subject updated' });
+  } catch (error) {
+    if (error.code === 'ER_DUP_ENTRY') {
+      return res.status(409).json({ message: `Subject "${subject_name}" already exists` });
+    }
+    console.error('Update subject error:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+router.delete('/subjects/:id', async (req, res) => {
+  try {
+    await pool.query("UPDATE subjects SET archived=1 WHERE id=?", [req.params.id]);
+    res.json({ message: 'Subject archived' });
+  } catch (error) {
+    console.error('Archive subject error:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+router.post('/subjects/:id/restore', async (req, res) => {
+  try {
+    await pool.query("UPDATE subjects SET archived=0 WHERE id=?", [req.params.id]);
+    res.json({ message: 'Subject restored' });
+  } catch (error) {
+    console.error('Restore subject error:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Students CRUD
+router.get('/students', async (_req, res) => {
+  try {
+    const [rows] = await pool.query(
+      `SELECT u.*, sec.section_name
+       FROM users u
+       LEFT JOIN sections sec ON sec.id=u.section_id
+       WHERE u.role='student' AND u.archived=0
+       ORDER BY u.id DESC`
+    );
+    const [subjects] = await pool.query(
+      `SELECT ss.student_id, s.subject_name
+       FROM student_subjects ss
+       JOIN subjects s ON s.id=ss.subject_id`
+    );
+    const studentsWithSubjects = rows.map(student => ({
+      ...student,
+      subjects: subjects.filter(sub => sub.student_id === student.id).map(sub => sub.subject_name).join(', ')
+    }));
+    res.json(studentsWithSubjects);
+  } catch (error) {
+    console.error('Get students error:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+router.get('/students/archived', async (_req, res) => {
+  try {
+    const [rows] = await pool.query(
+      `SELECT u.*, sec.section_name
+       FROM users u
+       LEFT JOIN sections sec ON sec.id=u.section_id
+       WHERE u.role='student' AND u.archived=1
+       ORDER BY u.id DESC`
+    );
+    res.json(rows);
+  } catch (error) {
+    console.error('Get archived students error:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+router.post('/students', async (req, res) => {
+  try {
+    const { first_name, last_name, middle_initial, email, password, usn, section_id, subject_ids } = req.body;
+    if (!first_name || !last_name || !email || !password) {
+      return res.status(400).json({ message: 'first_name, last_name, email, and password are required' });
+    }
+    const conn = await pool.getConnection();
+    try {
+      await conn.query('START TRANSACTION');
+      const [result] = await conn.query(
+        'INSERT INTO users(first_name,last_name,middle_initial,usn,email,password,role,section_id) VALUES(?,?,?,?,?,?,?,?)',
+        [first_name, last_name, middle_initial || null, usn || null, email, password, 'student', section_id || null]
+      );
+      if (Array.isArray(subject_ids) && subject_ids.length > 0) {
+        const values = subject_ids.map(sid => [result.insertId, sid]);
+        await conn.query('INSERT IGNORE INTO student_subjects(student_id,subject_id) VALUES ?', [values]);
+      }
+      await conn.query('COMMIT');
+      res.json({ message: 'Student created', insertId: result.insertId });
+    } catch (error) {
+      await conn.query('ROLLBACK');
+      throw error;
+    } finally {
+      conn.release();
+    }
+  } catch (error) {
+    if (error.code === 'ER_DUP_ENTRY') {
+      return res.status(409).json({ message: 'Email or USN already exists' });
+    }
+    console.error('Create student error:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+router.put('/students/:id', async (req, res) => {
+  try {
+    const { first_name, last_name, middle_initial, email, password, usn, section_id, subject_ids } = req.body;
+    if (!first_name || !last_name || !email) {
+      return res.status(400).json({ message: 'first_name, last_name, and email are required' });
+    }
+    const conn = await pool.getConnection();
+    try {
+      await conn.query('START TRANSACTION');
+      if (password) {
+        await conn.query(
+          'UPDATE users SET first_name=?, last_name=?, middle_initial=?, usn=?, email=?, password=?, section_id=? WHERE id=? AND role=?',
+          [first_name, last_name, middle_initial || null, usn || null, email, password, section_id || null, req.params.id, 'student']
+        );
+      } else {
+        await conn.query(
+          'UPDATE users SET first_name=?, last_name=?, middle_initial=?, usn=?, email=?, section_id=? WHERE id=? AND role=?',
+          [first_name, last_name, middle_initial || null, usn || null, email, section_id || null, req.params.id, 'student']
+        );
+      }
+      await conn.query('DELETE FROM student_subjects WHERE student_id=?', [req.params.id]);
+      if (Array.isArray(subject_ids) && subject_ids.length > 0) {
+        const values = subject_ids.map(sid => [req.params.id, sid]);
+        await conn.query('INSERT IGNORE INTO student_subjects(student_id,subject_id) VALUES ?', [values]);
+      }
+      await conn.query('COMMIT');
+      res.json({ message: 'Student updated' });
+    } catch (error) {
+      await conn.query('ROLLBACK');
+      throw error;
+    } finally {
+      conn.release();
+    }
+  } catch (error) {
+    if (error.code === 'ER_DUP_ENTRY') {
+      return res.status(409).json({ message: 'Email or USN already exists' });
+    }
+    console.error('Update student error:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+router.delete('/students/:id', async (req, res) => {
+  try {
+    await pool.query("UPDATE users SET archived=1 WHERE id=? AND role='student'", [req.params.id]);
+    res.json({ message: 'Student archived' });
+  } catch (error) {
+    console.error('Archive student error:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+router.post('/students/:id/restore', async (req, res) => {
+  try {
+    await pool.query("UPDATE users SET archived=0 WHERE id=? AND role='student'", [req.params.id]);
+    res.json({ message: 'Student restored' });
+  } catch (error) {
+    console.error('Restore student error:', error);
+    res.status(500).json({ message: error.message });
   }
 });
 

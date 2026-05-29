@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS sections (
   id INT AUTO_INCREMENT PRIMARY KEY,
   section_name VARCHAR(100) NOT NULL,
   course_id INT NULL,
+  archived TINYINT(1) DEFAULT 0,
   FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE SET NULL,
   UNIQUE KEY uq_section (section_name, course_id)
 );
@@ -14,10 +15,12 @@ CREATE TABLE IF NOT EXISTS users (
   first_name VARCHAR(50) NOT NULL,
   last_name VARCHAR(50) NOT NULL,
   middle_initial VARCHAR(10),
+  usn VARCHAR(50) NULL UNIQUE,
   role ENUM('admin','teacher','student') NOT NULL,
   email VARCHAR(120) UNIQUE NOT NULL,
   password VARCHAR(120) NOT NULL,
   section_id INT NULL,
+  archived TINYINT(1) NOT NULL DEFAULT 0,
   FOREIGN KEY (section_id) REFERENCES sections(id) ON DELETE SET NULL
 );
 
@@ -29,9 +32,10 @@ CREATE TABLE IF NOT EXISTS courses (
 
 CREATE TABLE IF NOT EXISTS subjects (
   id INT AUTO_INCREMENT PRIMARY KEY,
-  subject_name VARCHAR(120) NOT NULL,
+  subject_name VARCHAR(120) NOT NULL UNIQUE,
   teacher_id INT NULL,
   course_id INT NULL,
+  archived TINYINT(1) DEFAULT 0,
   FOREIGN KEY (teacher_id) REFERENCES users(id) ON DELETE SET NULL,
   FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE SET NULL
 );
@@ -85,11 +89,11 @@ ON DUPLICATE KEY UPDATE course_name=VALUES(course_name);
 INSERT INTO sections(section_name) VALUES ('BSIT2A'),('BSIT3B')
 ON DUPLICATE KEY UPDATE section_name=VALUES(section_name);
 
-INSERT INTO users(first_name, last_name, middle_initial, role, email, password, section_id) VALUES
- ('Admin', 'User', NULL, 'admin', 'admin@school.com', 'admin123', NULL),
- ('Teacher', 'One', NULL, 'teacher', 'teacher1@school.com', 'teacher123', NULL),
- ('Student', 'One', NULL, 'student', 'student1@school.com', 'student123', 1),
- ('Student', 'Two', NULL, 'student', 'student2@school.com', 'student123', 2)
+INSERT INTO users(first_name, last_name, middle_initial, usn, role, email, password, section_id) VALUES
+ ('Admin', 'User', NULL, NULL, 'admin', 'admin@school.com', 'admin123', NULL),
+ ('Teacher', 'One', NULL, NULL, 'teacher', 'teacher1@school.com', 'teacher123', NULL),
+ ('Student', 'One', NULL, 'USN-001', 'student', 'student1@school.com', 'student123', 1),
+ ('Student', 'Two', NULL, 'USN-002', 'student', 'student2@school.com', 'student123', 2)
 ON DUPLICATE KEY UPDATE first_name=VALUES(first_name), last_name=VALUES(last_name), middle_initial=VALUES(middle_initial);
 
 INSERT INTO subjects(subject_name, teacher_id)

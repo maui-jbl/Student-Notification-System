@@ -166,15 +166,63 @@ const [teachers, setTeachers] = useState([]);
   const [history, setHistory] = useState([]);
   const [message, setMessage] = useState('');
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [dashboardView, setDashboardView] = useState(null);
+  const [detailSearch, setDetailSearch] = useState('');
+  const [detailPage, setDetailPage] = useState(1);
+  const pageSize = 10;
+  const [notifyModal, setNotifyModal] = useState({ show: false, message: '' });
 
-const [teacherForm, setTeacherForm] = useState({ first_name: '', last_name: '', middle_initial: '', email: '', password: '' });
+  const notify = (msg) => {
+    setNotifyModal({ show: true, message: msg });
+  };
+
+  const closeNotify = () => {
+    setNotifyModal({ show: false, message: '' });
+  };
+
+  const [teacherForm, setTeacherForm] = useState({ first_name: '', last_name: '', middle_initial: '', email: '', password: '' });
   const [teacherFormSubjects, setTeacherFormSubjects] = useState([]);
   const [editingTeacher, setEditingTeacher] = useState(null);
   const [teacherSubjects, setTeacherSubjects] = useState([]);
   const [allSubjects, setAllSubjects] = useState([]);
+  const [confirmModal, setConfirmModal] = useState({ show: false, title: '', message: '', onConfirm: null });
+
+  const showConfirm = (title, message, onConfirm) => {
+    setConfirmModal({ show: true, title, message, onConfirm });
+  };
+
+  const closeConfirm = () => {
+    setConfirmModal({ show: false, title: '', message: '', onConfirm: null });
+  };
+  const [archivedTeachers, setArchivedTeachers] = useState([]);
+  const [teacherSearch, setTeacherSearch] = useState('');
+  const [teacherArchivedSearch, setTeacherArchivedSearch] = useState('');
 const [sectionForm, setSectionForm] = useState({ section_name: '', course_id: '' });
   const [editingSection, setEditingSection] = useState(null);
-  const [subjectForm, setSubjectForm] = useState({ subject_name: 'WebDev', teacher_id: '' });
+  const [archivedSections, setArchivedSections] = useState([]);
+  const [sectionSearch, setSectionSearch] = useState('');
+  const [sectionArchivedSearch, setSectionArchivedSearch] = useState('');
+  const [subjectForm, setSubjectForm] = useState({ subject_name: '', teacher_id: '' });
+  const [editingSubject, setEditingSubject] = useState(null);
+  const [archivedSubjects, setArchivedSubjects] = useState([]);
+  const [subjectSearch, setSubjectSearch] = useState('');
+  const [subjectArchivedSearch, setSubjectArchivedSearch] = useState('');
+  const [students, setStudents] = useState([]);
+  const [archivedStudents, setArchivedStudents] = useState([]);
+  const [studentForm, setStudentForm] = useState({ first_name: '', last_name: '', middle_initial: '', email: '', password: '', usn: '', section_id: '', subject_ids: [] });
+  const [editingStudent, setEditingStudent] = useState(null);
+  const [studentSubjects, setStudentSubjects] = useState([]);
+  const [studentSearch, setStudentSearch] = useState('');
+  const [archivedSearch, setArchivedSearch] = useState('');
+  const [teacherPage, setTeacherPage] = useState(1);
+  const [teacherArchivedPage, setTeacherArchivedPage] = useState(1);
+  const [coursePage, setCoursePage] = useState(1);
+  const [sectionPage, setSectionPage] = useState(1);
+  const [sectionArchivedPage, setSectionArchivedPage] = useState(1);
+  const [subjectPage, setSubjectPage] = useState(1);
+  const [subjectArchivedPage, setSubjectArchivedPage] = useState(1);
+  const [studentPage, setStudentPage] = useState(1);
+  const [studentArchivedPage, setStudentArchivedPage] = useState(1);
   const [courseForm, setCourseForm] = useState({ course_name: '', course_code: '' });
   const [editingCourse, setEditingCourse] = useState(null);
   const [notifForm, setNotifForm] = useState({
@@ -188,32 +236,63 @@ const [sectionForm, setSectionForm] = useState({ section_name: '', course_id: ''
 
   const headers = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token]);
 
-  const notify = (msg) => {
-    setMessage(msg);
-    setTimeout(() => setMessage(''), 5000);
-  };
-
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   const loadAdminData = async () => {
     try {
-      const [t, s, sub, c] = await Promise.all([
+      const [t, s, sub, c, stud] = await Promise.all([
         axios.get(`${API}/admin/teachers`, { headers }),
         axios.get(`${API}/admin/sections`, { headers }),
         axios.get(`${API}/admin/subjects`, { headers }),
         axios.get(`${API}/admin/courses`, { headers }),
+        axios.get(`${API}/admin/students`, { headers }),
       ]);
       setTeachers(t.data);
       setSections(s.data);
       setSubjects(sub.data);
       setAllSubjects(sub.data);
       setCourses(c.data);
+      setStudents(stud.data);
     } catch (err) {
       console.error('loadAdminData error:', err.response?.data || err.message);
       notify('Failed to load data: ' + (err.response?.data?.message || err.message));
     }
   };
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const loadArchivedStudents = async () => {
+    try {
+      const { data } = await axios.get(`${API}/admin/students/archived`, { headers });
+      setArchivedStudents(data);
+    } catch (err) {
+      console.error('loadArchivedStudents error:', err);
+    }
+  };
+
+  const loadArchivedTeachers = async () => {
+    try {
+      const { data } = await axios.get(`${API}/admin/teachers/archived`, { headers });
+      setArchivedTeachers(data);
+    } catch (err) {
+      console.error('loadArchivedTeachers error:', err);
+    }
+  };
+
+  const loadArchivedSections = async () => {
+    try {
+      const { data } = await axios.get(`${API}/admin/sections/archived`, { headers });
+      setArchivedSections(data);
+    } catch (err) {
+      console.error('loadArchivedSections error:', err);
+    }
+  };
+
+  const loadArchivedSubjects = async () => {
+    try {
+      const { data } = await axios.get(`${API}/admin/subjects/archived`, { headers });
+      setArchivedSubjects(data);
+    } catch (err) {
+      console.error('loadArchivedSubjects error:', err);
+    }
+  };
+
   const loadTeacherData = async () => {
     try {
       const [sec, mySub, his] = await Promise.all([
@@ -236,7 +315,7 @@ const [sectionForm, setSectionForm] = useState({ section_name: '', course_id: ''
     } else if (user?.role === 'teacher') {
       loadTeacherData();
     }
-  }, [user, loadAdminData, loadTeacherData]);
+  }, [user?.role, user?.id]);
 
   const createTeacher = async (e) => {
     e.preventDefault();
@@ -257,33 +336,50 @@ const [sectionForm, setSectionForm] = useState({ section_name: '', course_id: ''
 
   const updateTeacher = async (e) => {
     e.preventDefault();
-    if (!confirm('Are you sure you want to save changes to this teacher?')) return;
-    try {
-      const updateData = { ...editingTeacher };
-      if (!updateData.password || updateData.password === '') {
-        delete updateData.password;
+    showConfirm('Save Changes', 'Are you sure you want to save changes to this teacher?', async () => {
+      try {
+        const updateData = { ...editingTeacher };
+        if (!updateData.password || updateData.password === '') {
+          delete updateData.password;
+        }
+        await axios.put(`${API}/admin/teachers/${editingTeacher.id}`, updateData, { headers });
+        await axios.put(`${API}/admin/teachers/${editingTeacher.id}/subjects`, { subject_ids: teacherSubjects }, { headers });
+        notify('✓ Teacher updated successfully');
+        setEditingTeacher(null);
+        loadAdminData();
+      } catch (err) {
+        console.error('Update error:', err.response?.data || err.message);
+        notify('Failed to update teacher: ' + (err.response?.data?.message || err.message));
       }
-      await axios.put(`${API}/admin/teachers/${editingTeacher.id}`, updateData, { headers });
-      await axios.put(`${API}/admin/teachers/${editingTeacher.id}/subjects`, { subject_ids: teacherSubjects }, { headers });
-      notify('✓ Teacher updated successfully');
-      setEditingTeacher(null);
-      loadAdminData();
-    } catch (err) {
-      console.error('Update error:', err.response?.data || err.message);
-      notify('Failed to update teacher: ' + (err.response?.data?.message || err.message));
-    }
+    });
   };
 
-  const deleteTeacher = async (id) => {
-    if (!confirm('Are you sure you want to delete this teacher? All their assigned subjects will be unassigned.')) return;
-    try {
-      await axios.delete(`${API}/admin/teachers/${id}`, { headers });
-      notify('✓ Teacher deleted successfully');
-      loadAdminData();
-    } catch (err) {
-      console.error('Delete error:', err.response?.data || err.message);
-      notify('Failed to delete teacher: ' + (err.response?.data?.message || err.message));
-    }
+  const deleteTeacher = async (id, name) => {
+    showConfirm('Archive Teacher', `Are you sure you want to archive "${name}"? They can be restored from the Archived section.`, async () => {
+      try {
+        await axios.delete(`${API}/admin/teachers/${id}`, { headers });
+        notify('✓ Teacher archived');
+        loadAdminData();
+        loadArchivedTeachers();
+      } catch (err) {
+        console.error('Archive error:', err.response?.data || err.message);
+        notify('Failed to archive teacher: ' + (err.response?.data?.message || err.message));
+      }
+    });
+  };
+
+  const restoreTeacher = async (id, name) => {
+    showConfirm('Restore Teacher', `Restore "${name}"?`, async () => {
+      try {
+        await axios.post(`${API}/admin/teachers/${id}/restore`, {}, { headers });
+        notify('✓ Teacher restored');
+        loadArchivedTeachers();
+        loadAdminData();
+      } catch (err) {
+        console.error('Restore error:', err.response?.data || err.message);
+        notify('Failed to restore teacher: ' + (err.response?.data?.message || err.message));
+      }
+    });
   };
 
   const openEditModal = async (teacher) => {
@@ -341,28 +437,30 @@ const [sectionForm, setSectionForm] = useState({ section_name: '', course_id: ''
 
   const updateCourse = async (e) => {
     e.preventDefault();
-    if (!confirm('Are you sure you want to save changes to this course?')) return;
-    try {
-      await axios.put(`${API}/admin/courses/${editingCourse.id}`, editingCourse, { headers });
-      notify('✓ Course updated successfully');
-      setEditingCourse(null);
-      loadAdminData();
-    } catch (err) {
-      console.error('Update course error:', err.response?.data || err.message);
-      notify('Failed to update course: ' + (err.response?.data?.message || err.message));
-    }
+    showConfirm('Save Changes', 'Are you sure you want to save changes to this course?', async () => {
+      try {
+        await axios.put(`${API}/admin/courses/${editingCourse.id}`, editingCourse, { headers });
+        notify('✓ Course updated successfully');
+        setEditingCourse(null);
+        loadAdminData();
+      } catch (err) {
+        console.error('Update course error:', err.response?.data || err.message);
+        notify('Failed to update course: ' + (err.response?.data?.message || err.message));
+      }
+    });
   };
 
   const deleteCourse = async (id) => {
-    if (!confirm('Are you sure you want to delete this course? All subjects in this course will be unassigned.')) return;
-    try {
-      await axios.delete(`${API}/admin/courses/${id}`, { headers });
-      notify('✓ Course deleted successfully');
-      loadAdminData();
-    } catch (err) {
-      console.error('Delete course error:', err.response?.data || err.message);
-      notify('Failed to delete course: ' + (err.response?.data?.message || err.message));
-    }
+    showConfirm('Delete Course', 'Are you sure you want to delete this course? All subjects in this course will be unassigned.', async () => {
+      try {
+        await axios.delete(`${API}/admin/courses/${id}`, { headers });
+        notify('✓ Course deleted successfully');
+        loadAdminData();
+      } catch (err) {
+        console.error('Delete course error:', err.response?.data || err.message);
+        notify('Failed to delete course: ' + (err.response?.data?.message || err.message));
+      }
+    });
   };
 
   const openEditCourseModal = (course) => {
@@ -371,32 +469,93 @@ const [sectionForm, setSectionForm] = useState({ section_name: '', course_id: ''
 
   const updateSection = async (e) => {
     e.preventDefault();
-    if (!confirm('Are you sure you want to save changes to this section?')) return;
-    try {
-      await axios.put(`${API}/admin/sections/${editingSection.id}`, editingSection, { headers });
-      notify('✓ Section updated successfully');
-      setEditingSection(null);
-      loadAdminData();
-    } catch (err) {
-      console.error('Update section error:', err.response?.data || err.message);
-      notify('Failed to update section: ' + (err.response?.data?.message || err.message));
-    }
+    showConfirm('Save Changes', 'Are you sure you want to save changes to this section?', async () => {
+      try {
+        await axios.put(`${API}/admin/sections/${editingSection.id}`, editingSection, { headers });
+        notify('✓ Section updated successfully');
+        setEditingSection(null);
+        loadAdminData();
+      } catch (err) {
+        console.error('Update section error:', err.response?.data || err.message);
+        notify('Failed to update section: ' + (err.response?.data?.message || err.message));
+      }
+    });
   };
 
-  const deleteSection = async (id) => {
-    if (!confirm('Are you sure you want to delete this section? All students in this section will be unassigned.')) return;
-    try {
-      await axios.delete(`${API}/admin/sections/${id}`, { headers });
-      notify('✓ Section deleted successfully');
-      loadAdminData();
-    } catch (err) {
-      console.error('Delete section error:', err.response?.data || err.message);
-      notify('Failed to delete section: ' + (err.response?.data?.message || err.message));
-    }
+  const deleteSection = async (id, name) => {
+    showConfirm('Archive Section', `Are you sure you want to archive "${name}"?`, async () => {
+      try {
+        await axios.delete(`${API}/admin/sections/${id}`, { headers });
+        notify('✓ Section archived');
+        loadAdminData();
+        loadArchivedSections();
+      } catch (err) {
+        console.error('Archive section error:', err.response?.data || err.message);
+        notify('Failed to archive section: ' + (err.response?.data?.message || err.message));
+      }
+    });
+  };
+
+  const restoreSection = async (id, name) => {
+    showConfirm('Restore Section', `Restore "${name}"?`, async () => {
+      try {
+        await axios.post(`${API}/admin/sections/${id}/restore`, {}, { headers });
+        notify('✓ Section restored');
+        loadArchivedSections();
+        loadAdminData();
+      } catch (err) {
+        console.error('Restore section error:', err.response?.data || err.message);
+        notify('Failed to restore section: ' + (err.response?.data?.message || err.message));
+      }
+    });
   };
 
   const openEditSectionModal = (section) => {
     setEditingSection({ ...section });
+  };
+
+  const openEditSubjectModal = (subject) => {
+    setEditingSubject({ ...subject, teacher_id: subject.teacher_id || '' });
+  };
+
+  const updateSubject = async (e) => {
+    e.preventDefault();
+    showConfirm('Save Changes', 'Are you sure you want to save changes to this subject?', async () => {
+      try {
+        await axios.put(`${API}/admin/subjects/${editingSubject.id}`, editingSubject, { headers });
+        notify('✓ Subject updated successfully');
+        setEditingSubject(null);
+        loadAdminData();
+      } catch (err) {
+        notify('Failed to update subject: ' + (err.response?.data?.message || err.message));
+      }
+    });
+  };
+
+  const deleteSubject = async (id, subjectName) => {
+    showConfirm('Archive Subject', `Are you sure you want to archive "${subjectName}"?`, async () => {
+      try {
+        await axios.delete(`${API}/admin/subjects/${id}`, { headers });
+        notify('✓ Subject archived');
+        loadAdminData();
+        loadArchivedSubjects();
+      } catch (err) {
+        notify('Failed to archive subject: ' + (err.response?.data?.message || err.message));
+      }
+    });
+  };
+
+  const restoreSubject = async (id, name) => {
+    showConfirm('Restore Subject', `Restore "${name}"?`, async () => {
+      try {
+        await axios.post(`${API}/admin/subjects/${id}/restore`, {}, { headers });
+        notify('✓ Subject restored');
+        loadArchivedSubjects();
+        loadAdminData();
+      } catch (err) {
+        notify('Failed to restore subject: ' + (err.response?.data?.message || err.message));
+      }
+    });
   };
 
   const sendNotif = async (e) => {
@@ -425,6 +584,75 @@ const [sectionForm, setSectionForm] = useState({ section_name: '', course_id: ''
     }
   };
 
+  const createStudent = async (e) => {
+    e.preventDefault();
+    try {
+      await axios.post(`${API}/admin/students`, studentForm, { headers });
+      notify('✓ Student created successfully');
+      setStudentForm({ first_name: '', last_name: '', middle_initial: '', email: '', password: '', usn: '', section_id: '', subject_ids: [] });
+      loadAdminData();
+    } catch (err) {
+      notify('Failed to create student: ' + (err.response?.data?.message || err.message));
+    }
+  };
+
+  const updateStudent = async (e) => {
+    e.preventDefault();
+    showConfirm('Save Changes', 'Are you sure you want to save changes to this student?', async () => {
+      try {
+        await axios.put(`${API}/admin/students/${editingStudent.id}`, { ...editingStudent, subject_ids: studentSubjects }, { headers });
+        notify('✓ Student updated successfully');
+        setEditingStudent(null);
+        loadAdminData();
+      } catch (err) {
+        notify('Failed to update student: ' + (err.response?.data?.message || err.message));
+      }
+    });
+  };
+
+  const deleteStudent = async (id, name) => {
+    showConfirm('Archive Student', `Are you sure you want to archive "${name}"? They can be restored from the Archived section.`, async () => {
+      try {
+        await axios.delete(`${API}/admin/students/${id}`, { headers });
+        notify('✓ Student archived');
+        loadAdminData();
+        loadArchivedStudents();
+      } catch (err) {
+        notify('Failed to archive student: ' + (err.response?.data?.message || err.message));
+      }
+    });
+  };
+
+  const restoreStudent = async (id, name) => {
+    showConfirm('Restore Student', `Restore "${name}"?`, async () => {
+      try {
+        await axios.post(`${API}/admin/students/${id}/restore`, {}, { headers });
+        notify('✓ Student restored');
+        loadArchivedStudents();
+        loadAdminData();
+      } catch (err) {
+        notify('Failed to restore student: ' + (err.response?.data?.message || err.message));
+      }
+    });
+  };
+
+  const openEditStudentModal = (student) => {
+    const subIds = student.subjects
+      ? student.subjects.split(', ').map(name => {
+          const found = subjects.find(sub => sub.subject_name === name);
+          return found ? found.id : null;
+        }).filter(id => id !== null)
+      : [];
+    setStudentSubjects(subIds);
+    setEditingStudent({ ...student, password: '', section_id: student.section_id || '' });
+  };
+
+  const toggleStudentSubject = (subjectId) => {
+    setStudentSubjects(prev =>
+      prev.includes(subjectId) ? prev.filter(id => id !== subjectId) : [...prev, subjectId]
+    );
+  };
+
   return (
     <div className="dashboard">
       <nav className="navbar">
@@ -447,32 +675,38 @@ const [sectionForm, setSectionForm] = useState({ section_name: '', course_id: ''
           </button>
 {user?.role === 'admin' && (
              <>
-               <button
-                 className={`tab ${activeTab === 'teachers' ? 'active' : ''}`}
-                 onClick={() => setActiveTab('teachers')}
-               >
-                 👨‍🏫 Manage Teachers
-               </button>
+                <button
+                  className={`tab ${activeTab === 'teachers' ? 'active' : ''}`}
+                  onClick={() => { setActiveTab('teachers'); loadArchivedTeachers(); }}
+                >
+                  👨‍🏫 Manage Teachers
+                </button>
                <button
                  className={`tab ${activeTab === 'courses' ? 'active' : ''}`}
                  onClick={() => setActiveTab('courses')}
                >
                  📘 Manage Courses
                </button>
-               <button
-                 className={`tab ${activeTab === 'sections' ? 'active' : ''}`}
-                 onClick={() => setActiveTab('sections')}
-               >
-                 📚 Manage Sections
-               </button>
-               <button
-                 className={`tab ${activeTab === 'subjects' ? 'active' : ''}`}
-                 onClick={() => setActiveTab('subjects')}
-               >
-                 🎓 Manage Subjects
-               </button>
-             </>
-           )}
+                <button
+                  className={`tab ${activeTab === 'sections' ? 'active' : ''}`}
+                  onClick={() => { setActiveTab('sections'); loadArchivedSections(); }}
+                >
+                  📚 Manage Sections
+                </button>
+                 <button
+                   className={`tab ${activeTab === 'subjects' ? 'active' : ''}`}
+                   onClick={() => { setActiveTab('subjects'); loadArchivedSubjects(); }}
+                 >
+                   🎓 Manage Subjects
+                 </button>
+                <button
+                  className={`tab ${activeTab === 'students' ? 'active' : ''}`}
+                  onClick={() => { setActiveTab('students'); loadArchivedStudents(); }}
+                >
+                  👨‍🎓 Manage Students
+                </button>
+              </>
+            )}
           {user?.role === 'teacher' && (
             <button
               className={`tab ${activeTab === 'notifications' ? 'active' : ''}`}
@@ -484,11 +718,6 @@ const [sectionForm, setSectionForm] = useState({ section_name: '', course_id: ''
         </div>
 
         <div className="dashboard-content">
-          {message && (
-            <div className={`alert ${message.includes('✓') ? 'alert-success' : 'alert-error'}`}>
-              {message}
-            </div>
-          )}
 
           {/* Dashboard Overview Tab */}
           {activeTab === 'dashboard' && (
@@ -497,25 +726,39 @@ const [sectionForm, setSectionForm] = useState({ section_name: '', course_id: ''
               <div className="stats-grid">
                 {user?.role === 'admin' && (
                   <>
-                    <div className="stat-card">
+                    <div className="stat-card" style={{ cursor: 'pointer' }} onClick={() => { setDashboardView(dashboardView === 'teachers' ? null : 'teachers'); setDetailSearch(''); setDetailPage(1); }}>
                       <div className="stat-icon">👨‍🏫</div>
                       <div className="stat-content">
                         <p className="stat-label">Total Teachers</p>
                         <p className="stat-value">{teachers.length}</p>
                       </div>
                     </div>
-                    <div className="stat-card">
+                    <div className="stat-card" style={{ cursor: 'pointer' }} onClick={() => { setDashboardView(dashboardView === 'sections' ? null : 'sections'); setDetailSearch(''); setDetailPage(1); }}>
                       <div className="stat-icon">📚</div>
                       <div className="stat-content">
                         <p className="stat-label">Total Sections</p>
                         <p className="stat-value">{sections.length}</p>
                       </div>
                     </div>
-                    <div className="stat-card">
+                    <div className="stat-card" style={{ cursor: 'pointer' }} onClick={() => { setDashboardView(dashboardView === 'subjects' ? null : 'subjects'); setDetailSearch(''); setDetailPage(1); }}>
                       <div className="stat-icon">🎓</div>
                       <div className="stat-content">
                         <p className="stat-label">Total Subjects</p>
                         <p className="stat-value">{subjects.length}</p>
+                      </div>
+                    </div>
+                    <div className="stat-card" style={{ cursor: 'pointer' }} onClick={() => { setDashboardView(dashboardView === 'courses' ? null : 'courses'); setDetailSearch(''); setDetailPage(1); }}>
+                      <div className="stat-icon">📘</div>
+                      <div className="stat-content">
+                        <p className="stat-label">Total Courses</p>
+                        <p className="stat-value">{courses.length}</p>
+                      </div>
+                    </div>
+                    <div className="stat-card" style={{ cursor: 'pointer' }} onClick={() => { setDashboardView(dashboardView === 'students' ? null : 'students'); setDetailSearch(''); setDetailPage(1); }}>
+                      <div className="stat-icon">👨‍🎓</div>
+                      <div className="stat-content">
+                        <p className="stat-label">Total Students</p>
+                        <p className="stat-value">{students.length}</p>
                       </div>
                     </div>
                   </>
@@ -546,6 +789,71 @@ const [sectionForm, setSectionForm] = useState({ section_name: '', course_id: ''
                   </>
                 )}
               </div>
+
+              {dashboardView && (
+                <div className="card">
+                  <h3>
+                    {dashboardView === 'teachers' && '👨‍🏫 Teachers'}
+                    {dashboardView === 'sections' && '📚 Sections'}
+                    {dashboardView === 'subjects' && '🎓 Subjects'}
+                    {dashboardView === 'courses' && '📘 Courses'}
+                    {dashboardView === 'students' && '👨‍🎓 Students'}
+                  </h3>
+                  <input
+                    type="text"
+                    className="form-control search-input"
+                    placeholder={`Search ${dashboardView}...`}
+                    value={detailSearch}
+                    onChange={(e) => { setDetailSearch(e.target.value); setDetailPage(1); }}
+                  />
+                  {(() => {
+                    let data = [];
+                    if (dashboardView === 'teachers') data = teachers.filter(t => !detailSearch || getFullName(t).toLowerCase().includes(detailSearch.toLowerCase()) || (t.email||'').toLowerCase().includes(detailSearch.toLowerCase()));
+                    else if (dashboardView === 'sections') data = sections.filter(s => !detailSearch || (s.section_name||'').toLowerCase().includes(detailSearch.toLowerCase()) || (s.course_code||'').toLowerCase().includes(detailSearch.toLowerCase()));
+                    else if (dashboardView === 'subjects') data = subjects.filter(s => !detailSearch || (s.subject_name||'').toLowerCase().includes(detailSearch.toLowerCase()) || (s.teacher_name||'').toLowerCase().includes(detailSearch.toLowerCase()));
+                    else if (dashboardView === 'courses') data = courses.filter(c => !detailSearch || (c.course_name||'').toLowerCase().includes(detailSearch.toLowerCase()) || (c.course_code||'').toLowerCase().includes(detailSearch.toLowerCase()));
+                    else if (dashboardView === 'students') data = students.filter(s => !detailSearch || `${s.first_name} ${s.middle_initial? s.middle_initial+'. ' : ''}${s.last_name}`.toLowerCase().includes(detailSearch.toLowerCase()) || (s.email||'').toLowerCase().includes(detailSearch.toLowerCase()) || (s.usn||'').toLowerCase().includes(detailSearch.toLowerCase()) || (s.section_name||'').toLowerCase().includes(detailSearch.toLowerCase()));
+                    const totalPages = Math.ceil(data.length / pageSize) || 1;
+                    const page = Math.min(detailPage, totalPages);
+                    const start = (page - 1) * pageSize;
+                    const paged = data.slice(start, start + pageSize);
+                    return (
+                      <>
+                        <table className="data-table">
+                          <thead>
+                            <tr>
+                              <th>ID</th>
+                              {dashboardView === 'teachers' && <><th>Name</th><th>Email</th><th>Subjects</th></>}
+                              {dashboardView === 'sections' && <><th>Section</th><th>Course</th></>}
+                              {dashboardView === 'subjects' && <><th>Subject</th><th>Teacher</th></>}
+                              {dashboardView === 'courses' && <><th>Course Name</th><th>Code</th></>}
+                              {dashboardView === 'students' && <><th>Name</th><th>Email</th><th>USN</th><th>Section</th><th>Subjects</th></>}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {paged.length > 0 ? (
+                              dashboardView === 'teachers' ? paged.map(t => <tr key={t.id}><td>{t.id}</td><td>{getFullName(t)}</td><td>{t.email}</td><td>{t.subjects || '—'}</td></tr>) :
+                              dashboardView === 'sections' ? paged.map(s => <tr key={s.id}><td>{s.id}</td><td>{s.section_name}</td><td>{s.course_code || '—'}</td></tr>) :
+                              dashboardView === 'subjects' ? paged.map(s => <tr key={s.id}><td>{s.id}</td><td>{s.subject_name}</td><td>{s.teacher_name || 'N/A'}</td></tr>) :
+                              dashboardView === 'courses' ? paged.map(c => <tr key={c.id}><td>{c.id}</td><td>{c.course_name}</td><td>{c.course_code}</td></tr>) :
+                              dashboardView === 'students' ? paged.map(s => <tr key={s.id}><td>{s.id}</td><td>{[s.first_name, s.middle_initial? s.middle_initial+'.' : '', s.last_name].filter(Boolean).join(' ')}</td><td>{s.email}</td><td>{s.usn || '—'}</td><td>{s.section_name || '—'}</td><td>{s.subjects || '—'}</td></tr>) : null
+                            ) : (
+                              <tr><td colSpan={10}><p className="no-data">No results</p></td></tr>
+                            )}
+                          </tbody>
+                        </table>
+                        {totalPages > 1 && (
+                          <div className="pagination">
+                            <button className="btn-sm btn-secondary" disabled={page <= 1} onClick={() => setDetailPage(page - 1)}>← Prev</button>
+                            <span style={{ margin: '0 1rem', color: 'var(--text-light)' }}>Page {page} of {totalPages}</span>
+                            <button className="btn-sm btn-secondary" disabled={page >= totalPages} onClick={() => setDetailPage(page + 1)}>Next →</button>
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
+                </div>
+              )}
             </section>
           )}
 
@@ -635,35 +943,123 @@ const [sectionForm, setSectionForm] = useState({ section_name: '', course_id: ''
 
               <div className="card mt-4">
                 <h3>Teachers List</h3>
-                {teachers.length > 0 ? (
-<table className="data-table">
-                     <thead>
-                       <tr>
-                         <th>ID</th>
-                         <th>Name</th>
-                         <th>Email</th>
-                         <th>Subjects</th>
-                         <th>Actions</th>
-                       </tr>
-                     </thead>
-                     <tbody>
-                       {teachers.map((t) => (
-                         <tr key={t.id}>
-                           <td>{t.id}</td>
-                           <td>{getFullName(t)}</td>
-                           <td>{t.email}</td>
-                           <td>{t.subjects || '—'}</td>
-                           <td>
-                             <button className="btn-sm btn-secondary" onClick={() => openEditModal(t)}>Edit</button>
-                             <button className="btn-sm btn-danger" onClick={() => deleteTeacher(t.id)}>Delete</button>
-                           </td>
-                         </tr>
-                       ))}
-                     </tbody>
-                   </table>
-                ) : (
-                  <p className="no-data">No teachers found</p>
-                )}
+                <input
+                  type="text"
+                  className="form-control search-input"
+                  placeholder="Search by name or email..."
+                  value={teacherSearch}
+                  onChange={(e) => { setTeacherSearch(e.target.value); setTeacherPage(1); }}
+                />
+                {(() => {
+                  const filtered = teachers.filter(t =>
+                    !teacherSearch ||
+                    getFullName(t).toLowerCase().includes(teacherSearch.toLowerCase()) ||
+                    (t.email || '').toLowerCase().includes(teacherSearch.toLowerCase())
+                  );
+                  const totalPages = Math.ceil(filtered.length / pageSize) || 1;
+                  const page = Math.min(teacherPage, totalPages);
+                  const start = (page - 1) * pageSize;
+                  const paged = filtered.slice(start, start + pageSize);
+                  return (
+                    <>
+                      {paged.length > 0 ? (
+                        <table className="data-table">
+                          <thead>
+                            <tr>
+                              <th>ID</th>
+                              <th>Name</th>
+                              <th>Email</th>
+                              <th>Subjects</th>
+                              <th>Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {paged.map((t) => (
+                              <tr key={t.id}>
+                                <td>{t.id}</td>
+                                <td>{getFullName(t)}</td>
+                                <td>{t.email}</td>
+                                <td>{t.subjects || '—'}</td>
+                                <td>
+                                  <button className="btn-sm btn-secondary" onClick={() => openEditModal(t)}>Edit</button>
+                                  <button className="btn-sm btn-danger" onClick={() => deleteTeacher(t.id, getFullName(t))}>Archive</button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      ) : (
+                        <p className="no-data">No teachers found</p>
+                      )}
+                      {totalPages > 1 && (
+                        <div className="pagination">
+                          <button className="btn-sm btn-secondary" disabled={page <= 1} onClick={() => setTeacherPage(page - 1)}>← Prev</button>
+                          <span style={{ margin: '0 1rem', color: 'var(--text-light)' }}>Page {page} of {totalPages}</span>
+                          <button className="btn-sm btn-secondary" disabled={page >= totalPages} onClick={() => setTeacherPage(page + 1)}>Next →</button>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
+              </div>
+
+              <div className="card mt-4">
+                <h3>🗃️ Archived Teachers</h3>
+                <input
+                  type="text"
+                  className="form-control search-input"
+                  placeholder="Search archived by name or email..."
+                  value={teacherArchivedSearch}
+                  onChange={(e) => { setTeacherArchivedSearch(e.target.value); setTeacherArchivedPage(1); }}
+                />
+                {(() => {
+                  const filtered = archivedTeachers.filter(t =>
+                    !teacherArchivedSearch ||
+                    getFullName(t).toLowerCase().includes(teacherArchivedSearch.toLowerCase()) ||
+                    (t.email || '').toLowerCase().includes(teacherArchivedSearch.toLowerCase())
+                  );
+                  const totalPages = Math.ceil(filtered.length / pageSize) || 1;
+                  const page = Math.min(teacherArchivedPage, totalPages);
+                  const start = (page - 1) * pageSize;
+                  const paged = filtered.slice(start, start + pageSize);
+                  return (
+                    <>
+                      {paged.length > 0 ? (
+                        <table className="data-table">
+                          <thead>
+                            <tr>
+                              <th>ID</th>
+                              <th>Name</th>
+                              <th>Email</th>
+                              <th>Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {paged.map((t) => (
+                              <tr key={t.id}>
+                                <td>{t.id}</td>
+                                <td>{getFullName(t)}</td>
+                                <td>{t.email}</td>
+                                <td>
+                                  <button className="btn-sm btn-secondary" onClick={() => restoreTeacher(t.id, getFullName(t))}>Restore</button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      ) : (
+                        <p className="no-data">No archived teachers</p>
+                      )}
+                      {totalPages > 1 && (
+                        <div className="pagination">
+                          <button className="btn-sm btn-secondary" disabled={page <= 1} onClick={() => setTeacherArchivedPage(page - 1)}>← Prev</button>
+                          <span style={{ margin: '0 1rem', color: 'var(--text-light)' }}>Page {page} of {totalPages}</span>
+                          <button className="btn-sm btn-secondary" disabled={page >= totalPages} onClick={() => setTeacherArchivedPage(page + 1)}>Next →</button>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
             </section>
           )}
@@ -787,40 +1183,57 @@ const [sectionForm, setSectionForm] = useState({ section_name: '', course_id: ''
                  </form>
                </div>
 
-               <div className="card mt-4">
-                 <h3>Courses List</h3>
-                 {courses.length > 0 ? (
-                   <table className="data-table">
-                     <thead>
-                       <tr>
-                         <th>ID</th>
-                         <th>Course Name</th>
-                         <th>Course Code</th>
-                         <th>Actions</th>
-                       </tr>
-                     </thead>
-                     <tbody>
-                       {courses.map((c) => (
-                         <tr key={c.id}>
-                           <td>{c.id}</td>
-                           <td>{c.course_name}</td>
-                           <td>{c.course_code}</td>
-                           <td>
-                             <button className="btn-sm btn-secondary" onClick={() => openEditCourseModal(c)}>Edit</button>
-                             <button className="btn-sm btn-danger" onClick={() => deleteCourse(c.id)}>Delete</button>
-                           </td>
-                         </tr>
-                       ))}
-                     </tbody>
-                   </table>
-                 ) : (
-                   <p className="no-data">No courses found</p>
-                 )}
-               </div>
+                <div className="card mt-4">
+                  <h3>Courses List</h3>
+                  {(() => {
+                    const totalPages = Math.ceil(courses.length / pageSize) || 1;
+                    const page = Math.min(coursePage, totalPages);
+                    const start = (page - 1) * pageSize;
+                    const paged = courses.slice(start, start + pageSize);
+                    return (
+                      <>
+                        {paged.length > 0 ? (
+                          <table className="data-table">
+                            <thead>
+                              <tr>
+                                <th>ID</th>
+                                <th>Course Name</th>
+                                <th>Course Code</th>
+                                <th>Actions</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {paged.map((c) => (
+                                <tr key={c.id}>
+                                  <td>{c.id}</td>
+                                  <td>{c.course_name}</td>
+                                  <td>{c.course_code}</td>
+                                  <td>
+                                    <button className="btn-sm btn-secondary" onClick={() => openEditCourseModal(c)}>Edit</button>
+                                    <button className="btn-sm btn-danger" onClick={() => deleteCourse(c.id)}>Delete</button>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        ) : (
+                          <p className="no-data">No courses found</p>
+                        )}
+                        {totalPages > 1 && (
+                          <div className="pagination">
+                            <button className="btn-sm btn-secondary" disabled={page <= 1} onClick={() => setCoursePage(page - 1)}>← Prev</button>
+                            <span style={{ margin: '0 1rem', color: 'var(--text-light)' }}>Page {page} of {totalPages}</span>
+                            <button className="btn-sm btn-secondary" disabled={page >= totalPages} onClick={() => setCoursePage(page + 1)}>Next →</button>
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
+                </div>
              </section>
-           )}
+            )}
 
-           {/* Edit Course Modal */}
+            {/* Edit Course Modal */}
            {editingCourse && (
              <div className="modal-overlay">
                <div className="modal">
@@ -895,36 +1308,124 @@ const [sectionForm, setSectionForm] = useState({ section_name: '', course_id: ''
                  </form>
                </div>
 
-               <div className="card mt-4">
-                 <h3>Sections List</h3>
-                 {sections.length > 0 ? (
-                   <table className="data-table">
-                     <thead>
-                       <tr>
-                         <th>ID</th>
-                         <th>Section Name</th>
-                         <th>Course</th>
-                         <th>Actions</th>
-                       </tr>
-                     </thead>
-                     <tbody>
-                       {sections.map((s) => (
-                         <tr key={s.id}>
-                           <td>{s.id}</td>
-                           <td>{s.section_name}</td>
-                           <td>{s.course_code || '—'}</td>
-                           <td>
-                             <button className="btn-sm btn-secondary" onClick={() => openEditSectionModal(s)}>Edit</button>
-                             <button className="btn-sm btn-danger" onClick={() => deleteSection(s.id)}>Delete</button>
-                           </td>
-                         </tr>
-                       ))}
-                     </tbody>
-                   </table>
-                 ) : (
-                   <p className="no-data">No sections found</p>
-                 )}
-               </div>
+                 <div className="card mt-4">
+                   <h3>Sections List</h3>
+                   <input
+                     type="text"
+                     className="form-control search-input"
+                     placeholder="Search by section name or course..."
+                     value={sectionSearch}
+                     onChange={(e) => { setSectionSearch(e.target.value); setSectionPage(1); }}
+                   />
+                   {(() => {
+                     const filtered = sections.filter(s =>
+                       !sectionSearch ||
+                       (s.section_name || '').toLowerCase().includes(sectionSearch.toLowerCase()) ||
+                       (s.course_code || '').toLowerCase().includes(sectionSearch.toLowerCase())
+                     );
+                     const totalPages = Math.ceil(filtered.length / pageSize) || 1;
+                     const page = Math.min(sectionPage, totalPages);
+                     const start = (page - 1) * pageSize;
+                     const paged = filtered.slice(start, start + pageSize);
+                     return (
+                       <>
+                         {paged.length > 0 ? (
+                           <table className="data-table">
+                             <thead>
+                               <tr>
+                                 <th>ID</th>
+                                 <th>Section Name</th>
+                                 <th>Course</th>
+                                 <th>Actions</th>
+                               </tr>
+                             </thead>
+                             <tbody>
+                               {paged.map((s) => (
+                                 <tr key={s.id}>
+                                   <td>{s.id}</td>
+                                   <td>{s.section_name}</td>
+                                   <td>{s.course_code || '—'}</td>
+                                   <td>
+                                     <button className="btn-sm btn-secondary" onClick={() => openEditSectionModal(s)}>Edit</button>
+                                     <button className="btn-sm btn-danger" onClick={() => deleteSection(s.id, s.section_name)}>Archive</button>
+                                   </td>
+                                 </tr>
+                               ))}
+                             </tbody>
+                           </table>
+                         ) : (
+                           <p className="no-data">No sections found</p>
+                         )}
+                         {totalPages > 1 && (
+                           <div className="pagination">
+                             <button className="btn-sm btn-secondary" disabled={page <= 1} onClick={() => setSectionPage(page - 1)}>← Prev</button>
+                             <span style={{ margin: '0 1rem', color: 'var(--text-light)' }}>Page {page} of {totalPages}</span>
+                             <button className="btn-sm btn-secondary" disabled={page >= totalPages} onClick={() => setSectionPage(page + 1)}>Next →</button>
+                           </div>
+                         )}
+                       </>
+                     );
+                   })()}
+                 </div>
+
+                 <div className="card mt-4">
+                   <h3>🗃️ Archived Sections</h3>
+                   <input
+                     type="text"
+                     className="form-control search-input"
+                     placeholder="Search archived by section name or course..."
+                     value={sectionArchivedSearch}
+                     onChange={(e) => { setSectionArchivedSearch(e.target.value); setSectionArchivedPage(1); }}
+                   />
+                   {(() => {
+                     const filtered = archivedSections.filter(s =>
+                       !sectionArchivedSearch ||
+                       (s.section_name || '').toLowerCase().includes(sectionArchivedSearch.toLowerCase()) ||
+                       (s.course_code || '').toLowerCase().includes(sectionArchivedSearch.toLowerCase())
+                     );
+                     const totalPages = Math.ceil(filtered.length / pageSize) || 1;
+                     const page = Math.min(sectionArchivedPage, totalPages);
+                     const start = (page - 1) * pageSize;
+                     const paged = filtered.slice(start, start + pageSize);
+                     return (
+                       <>
+                         {paged.length > 0 ? (
+                           <table className="data-table">
+                             <thead>
+                               <tr>
+                                 <th>ID</th>
+                                 <th>Section Name</th>
+                                 <th>Course</th>
+                                 <th>Actions</th>
+                               </tr>
+                             </thead>
+                             <tbody>
+                               {paged.map((s) => (
+                                 <tr key={s.id}>
+                                   <td>{s.id}</td>
+                                   <td>{s.section_name}</td>
+                                   <td>{s.course_code || '—'}</td>
+                                   <td>
+                                     <button className="btn-sm btn-secondary" onClick={() => restoreSection(s.id, s.section_name)}>Restore</button>
+                                   </td>
+                                 </tr>
+                               ))}
+                             </tbody>
+                           </table>
+                         ) : (
+                           <p className="no-data">No archived sections</p>
+                         )}
+                         {totalPages > 1 && (
+                           <div className="pagination">
+                             <button className="btn-sm btn-secondary" disabled={page <= 1} onClick={() => setSectionArchivedPage(page - 1)}>← Prev</button>
+                             <span style={{ margin: '0 1rem', color: 'var(--text-light)' }}>Page {page} of {totalPages}</span>
+                             <button className="btn-sm btn-secondary" disabled={page >= totalPages} onClick={() => setSectionArchivedPage(page + 1)}>Next →</button>
+                           </div>
+                         )}
+                       </>
+                     );
+                   })()}
+                 </div>
              </section>
            )}
 
@@ -1008,31 +1509,514 @@ const [sectionForm, setSectionForm] = useState({ section_name: '', course_id: ''
                 </form>
               </div>
 
-              <div className="card mt-4">
-                <h3>Subjects List</h3>
-                {subjects.length > 0 ? (
-                  <table className="data-table">
-                    <thead>
-                      <tr>
-                        <th>ID</th>
-                        <th>Subject</th>
-                        <th>Teacher</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {subjects.map((s) => (
-                        <tr key={s.id}>
-                          <td>{s.id}</td>
-                          <td>{s.subject_name}</td>
-                          <td>{s.teacher_name || 'N/A'}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                ) : (
-                  <p className="no-data">No subjects found</p>
-                )}
+               <div className="card mt-4">
+                 <h3>Subjects List</h3>
+                 <input
+                   type="text"
+                   className="form-control search-input"
+                   placeholder="Search by subject name or teacher..."
+                   value={subjectSearch}
+                   onChange={(e) => { setSubjectSearch(e.target.value); setSubjectPage(1); }}
+                 />
+                 {(() => {
+                   const filtered = subjects.filter(s =>
+                     !subjectSearch ||
+                     (s.subject_name || '').toLowerCase().includes(subjectSearch.toLowerCase()) ||
+                     (s.teacher_name || '').toLowerCase().includes(subjectSearch.toLowerCase())
+                   );
+                   const totalPages = Math.ceil(filtered.length / pageSize) || 1;
+                   const page = Math.min(subjectPage, totalPages);
+                   const start = (page - 1) * pageSize;
+                   const paged = filtered.slice(start, start + pageSize);
+                   return (
+                     <>
+                       {paged.length > 0 ? (
+                         <table className="data-table">
+                           <thead>
+                             <tr>
+                               <th>ID</th>
+                               <th>Subject</th>
+                               <th>Teacher</th>
+                               <th>Actions</th>
+                             </tr>
+                           </thead>
+                           <tbody>
+                             {paged.map((s) => (
+                               <tr key={s.id}>
+                                 <td>{s.id}</td>
+                                 <td>{s.subject_name}</td>
+                                 <td>{s.teacher_name || 'N/A'}</td>
+                                 <td>
+                                   <button className="btn-sm btn-secondary" onClick={() => openEditSubjectModal(s)}>Edit</button>
+                                   <button className="btn-sm btn-danger" onClick={() => deleteSubject(s.id, s.subject_name)}>Archive</button>
+                                 </td>
+                               </tr>
+                             ))}
+                           </tbody>
+                         </table>
+                       ) : (
+                         <p className="no-data">No subjects found</p>
+                       )}
+                       {totalPages > 1 && (
+                         <div className="pagination">
+                           <button className="btn-sm btn-secondary" disabled={page <= 1} onClick={() => setSubjectPage(page - 1)}>← Prev</button>
+                           <span style={{ margin: '0 1rem', color: 'var(--text-light)' }}>Page {page} of {totalPages}</span>
+                           <button className="btn-sm btn-secondary" disabled={page >= totalPages} onClick={() => setSubjectPage(page + 1)}>Next →</button>
+                         </div>
+                       )}
+                     </>
+                   );
+                 })()}
+               </div>
+
+               <div className="card mt-4">
+                 <h3>🗃️ Archived Subjects</h3>
+                 <input
+                   type="text"
+                   className="form-control search-input"
+                   placeholder="Search archived by subject name or teacher..."
+                   value={subjectArchivedSearch}
+                   onChange={(e) => { setSubjectArchivedSearch(e.target.value); setSubjectArchivedPage(1); }}
+                 />
+                 {(() => {
+                   const filtered = archivedSubjects.filter(s =>
+                     !subjectArchivedSearch ||
+                     (s.subject_name || '').toLowerCase().includes(subjectArchivedSearch.toLowerCase()) ||
+                     (s.teacher_name || '').toLowerCase().includes(subjectArchivedSearch.toLowerCase())
+                   );
+                   const totalPages = Math.ceil(filtered.length / pageSize) || 1;
+                   const page = Math.min(subjectArchivedPage, totalPages);
+                   const start = (page - 1) * pageSize;
+                   const paged = filtered.slice(start, start + pageSize);
+                   return (
+                     <>
+                       {paged.length > 0 ? (
+                         <table className="data-table">
+                           <thead>
+                             <tr>
+                               <th>ID</th>
+                               <th>Subject</th>
+                               <th>Teacher</th>
+                               <th>Actions</th>
+                             </tr>
+                           </thead>
+                           <tbody>
+                             {paged.map((s) => (
+                               <tr key={s.id}>
+                                 <td>{s.id}</td>
+                                 <td>{s.subject_name}</td>
+                                 <td>{s.teacher_name || 'N/A'}</td>
+                                 <td>
+                                   <button className="btn-sm btn-secondary" onClick={() => restoreSubject(s.id, s.subject_name)}>Restore</button>
+                                 </td>
+                               </tr>
+                             ))}
+                           </tbody>
+                         </table>
+                       ) : (
+                         <p className="no-data">No archived subjects</p>
+                       )}
+                       {totalPages > 1 && (
+                         <div className="pagination">
+                           <button className="btn-sm btn-secondary" disabled={page <= 1} onClick={() => setSubjectArchivedPage(page - 1)}>← Prev</button>
+                           <span style={{ margin: '0 1rem', color: 'var(--text-light)' }}>Page {page} of {totalPages}</span>
+                           <button className="btn-sm btn-secondary" disabled={page >= totalPages} onClick={() => setSubjectArchivedPage(page + 1)}>Next →</button>
+                         </div>
+                       )}
+                     </>
+                   );
+                 })()}
+               </div>
+
+              {/* Edit Subject Modal */}
+              {editingSubject && (
+                <div className="modal-overlay">
+                  <div className="modal">
+                    <div className="modal-header">
+                      <h3>Edit Subject</h3>
+                      <button className="modal-close" onClick={() => setEditingSubject(null)}>×</button>
+                    </div>
+                    <form onSubmit={updateSubject}>
+                      <div className="form-group">
+                        <label>Subject Name</label>
+                        <input
+                          type="text"
+                          value={editingSubject.subject_name || ''}
+                          onChange={(e) => setEditingSubject({ ...editingSubject, subject_name: e.target.value })}
+                          required
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label>Assign Teacher</label>
+                        <select
+                          value={editingSubject.teacher_id || ''}
+                          onChange={(e) => setEditingSubject({ ...editingSubject, teacher_id: e.target.value })}
+                          required
+                        >
+                          <option value="">Select a teacher</option>
+                          {teachers.map((t) => (
+                            <option key={t.id} value={t.id}>
+                              {getFullName(t)}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="modal-actions">
+                        <button type="button" className="btn-secondary" onClick={() => setEditingSubject(null)}>Cancel</button>
+                        <button type="submit" className="btn-primary">Save Changes</button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              )}
+            </section>
+          )}
+
+          {/* Admin: Manage Students */}
+          {user?.role === 'admin' && activeTab === 'students' && (
+            <section className="form-section">
+              <h2>👨‍🎓 Manage Students</h2>
+              <div className="card">
+                <h3>Add New Student</h3>
+                <form onSubmit={createStudent}>
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label>First Name</label>
+                      <input
+                        type="text"
+                        placeholder="First name"
+                        value={studentForm.first_name}
+                        onChange={(e) => setStudentForm({ ...studentForm, first_name: e.target.value })}
+                        required
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label>Last Name</label>
+                      <input
+                        type="text"
+                        placeholder="Last name"
+                        value={studentForm.last_name}
+                        onChange={(e) => setStudentForm({ ...studentForm, last_name: e.target.value })}
+                        required
+                      />
+                    </div>
+                  </div>
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label>Middle Initial</label>
+                      <input
+                        type="text"
+                        placeholder="M.I."
+                        maxLength="10"
+                        value={studentForm.middle_initial}
+                        onChange={(e) => setStudentForm({ ...studentForm, middle_initial: e.target.value })}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label>USN</label>
+                      <input
+                        type="text"
+                        placeholder="University Student No."
+                        value={studentForm.usn}
+                        onChange={(e) => setStudentForm({ ...studentForm, usn: e.target.value })}
+                      />
+                    </div>
+                  </div>
+                  <div className="form-group">
+                    <label>Email</label>
+                    <input
+                      type="email"
+                      placeholder="Email address"
+                      value={studentForm.email}
+                      onChange={(e) => setStudentForm({ ...studentForm, email: e.target.value })}
+                      required
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Password</label>
+                    <input
+                      type="password"
+                      placeholder="Password"
+                      value={studentForm.password}
+                      onChange={(e) => setStudentForm({ ...studentForm, password: e.target.value })}
+                      required
+                    />
+                  </div>
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label>Section</label>
+                      <select
+                        value={studentForm.section_id}
+                        onChange={(e) => setStudentForm({ ...studentForm, section_id: e.target.value })}
+                      >
+                        <option value="">Select section</option>
+                        {sections.map((s) => (
+                          <option key={s.id} value={s.id}>{s.section_name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <label>Subjects</label>
+                      <div className="subject-checklist">
+                        {subjects.map((s) => (
+                          <label key={s.id} className="checkbox-label">
+                            <input
+                              type="checkbox"
+                              checked={studentForm.subject_ids.includes(s.id)}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setStudentForm({ ...studentForm, subject_ids: [...studentForm.subject_ids, s.id] });
+                                } else {
+                                  setStudentForm({ ...studentForm, subject_ids: studentForm.subject_ids.filter(id => id !== s.id) });
+                                }
+                              }}
+                            />
+                            {s.subject_name}
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                  <button type="submit" className="btn-primary">Save Student</button>
+                </form>
               </div>
+
+               <div className="card mt-4">
+                 <h3>Students List</h3>
+                 <input
+                   type="text"
+                   className="form-control search-input"
+                   placeholder="Search by name, email, USN, or section..."
+                   value={studentSearch}
+                   onChange={(e) => { setStudentSearch(e.target.value); setStudentPage(1); }}
+                 />
+                 {(() => {
+                   const filtered = students.filter(s =>
+                     !studentSearch ||
+                     `${s.first_name} ${s.middle_initial ? s.middle_initial + '. ' : ''}${s.last_name}`.toLowerCase().includes(studentSearch.toLowerCase()) ||
+                     (s.email || '').toLowerCase().includes(studentSearch.toLowerCase()) ||
+                     (s.usn || '').toLowerCase().includes(studentSearch.toLowerCase()) ||
+                     (s.section_name || '').toLowerCase().includes(studentSearch.toLowerCase())
+                   );
+                   const totalPages = Math.ceil(filtered.length / pageSize) || 1;
+                   const page = Math.min(studentPage, totalPages);
+                   const start = (page - 1) * pageSize;
+                   const paged = filtered.slice(start, start + pageSize);
+                   return (
+                     <>
+                       {paged.length > 0 ? (
+                         <table className="data-table">
+                           <thead>
+                             <tr>
+                               <th>ID</th>
+                               <th>Name</th>
+                               <th>Email</th>
+                               <th>USN</th>
+                               <th>Section</th>
+                               <th>Subjects</th>
+                               <th>Actions</th>
+                             </tr>
+                           </thead>
+                           <tbody>
+                             {paged.map((s) => (
+                             <tr key={s.id}>
+                               <td>{s.id}</td>
+                               <td>{[s.first_name, s.middle_initial ? s.middle_initial + '.' : '', s.last_name].filter(Boolean).join(' ')}</td>
+                               <td>{s.email}</td>
+                               <td>{s.usn || '—'}</td>
+                               <td>{s.section_name || '—'}</td>
+                               <td>{s.subjects || '—'}</td>
+                               <td>
+                                 <button className="btn-sm btn-secondary" onClick={() => openEditStudentModal(s)}>Edit</button>
+                                 <button className="btn-sm btn-danger" onClick={() => deleteStudent(s.id, [s.first_name, s.last_name].filter(Boolean).join(' '))}>Archive</button>
+                               </td>
+                             </tr>
+                           ))}
+                         </tbody>
+                       </table>
+                     ) : (
+                       <p className="no-data">No students found</p>
+                     )}
+                     {totalPages > 1 && (
+                       <div className="pagination">
+                         <button className="btn-sm btn-secondary" disabled={page <= 1} onClick={() => setStudentPage(page - 1)}>← Prev</button>
+                         <span style={{ margin: '0 1rem', color: 'var(--text-light)' }}>Page {page} of {totalPages}</span>
+                         <button className="btn-sm btn-secondary" disabled={page >= totalPages} onClick={() => setStudentPage(page + 1)}>Next →</button>
+                       </div>
+                     )}
+                   </>
+                 );
+               })()}
+               </div>
+
+              {/* Edit Student Modal */}
+              {editingStudent && (
+                <div className="modal-overlay">
+                  <div className="modal">
+                    <div className="modal-header">
+                      <h3>Edit Student</h3>
+                      <button className="modal-close" onClick={() => setEditingStudent(null)}>×</button>
+                    </div>
+                    <form onSubmit={updateStudent}>
+                      <div className="form-row">
+                        <div className="form-group">
+                          <label>First Name</label>
+                          <input
+                            type="text"
+                            value={editingStudent.first_name || ''}
+                            onChange={(e) => setEditingStudent({ ...editingStudent, first_name: e.target.value })}
+                            required
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label>Last Name</label>
+                          <input
+                            type="text"
+                            value={editingStudent.last_name || ''}
+                            onChange={(e) => setEditingStudent({ ...editingStudent, last_name: e.target.value })}
+                            required
+                          />
+                        </div>
+                      </div>
+                      <div className="form-row">
+                        <div className="form-group">
+                          <label>Middle Initial</label>
+                          <input
+                            type="text"
+                            maxLength="10"
+                            value={editingStudent.middle_initial || ''}
+                            onChange={(e) => setEditingStudent({ ...editingStudent, middle_initial: e.target.value })}
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label>USN</label>
+                          <input
+                            type="text"
+                            value={editingStudent.usn || ''}
+                            onChange={(e) => setEditingStudent({ ...editingStudent, usn: e.target.value })}
+                          />
+                        </div>
+                      </div>
+                      <div className="form-group">
+                        <label>Email</label>
+                        <input
+                          type="email"
+                          value={editingStudent.email || ''}
+                          onChange={(e) => setEditingStudent({ ...editingStudent, email: e.target.value })}
+                          required
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label>Password (leave blank to keep unchanged)</label>
+                        <input
+                          type="password"
+                          placeholder="New password"
+                          value={editingStudent.password || ''}
+                          onChange={(e) => setEditingStudent({ ...editingStudent, password: e.target.value })}
+                        />
+                      </div>
+                      <div className="form-row">
+                        <div className="form-group">
+                          <label>Section</label>
+                          <select
+                            value={editingStudent.section_id || ''}
+                            onChange={(e) => setEditingStudent({ ...editingStudent, section_id: e.target.value })}
+                          >
+                            <option value="">Select section</option>
+                            {sections.map((sec) => (
+                              <option key={sec.id} value={sec.id}>{sec.section_name}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="form-group">
+                          <label>Subjects</label>
+                          <div className="subject-checklist">
+                            {subjects.map((sub) => (
+                              <label key={sub.id} className="checkbox-label">
+                                <input
+                                  type="checkbox"
+                                  checked={studentSubjects.includes(sub.id)}
+                                  onChange={() => toggleStudentSubject(sub.id)}
+                                />
+                                {sub.subject_name}
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="modal-actions">
+                        <button type="button" className="btn-secondary" onClick={() => setEditingStudent(null)}>Cancel</button>
+                        <button type="submit" className="btn-primary">Save Changes</button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              )}
+
+               <div className="card mt-4">
+                 <h3>🗃️ Archived Students</h3>
+                 <input
+                   type="text"
+                   className="form-control search-input"
+                   placeholder="Search archived by name, email, USN, or section..."
+                   value={archivedSearch}
+                   onChange={(e) => { setArchivedSearch(e.target.value); setStudentArchivedPage(1); }}
+                 />
+                 {(() => {
+                   const filtered = archivedStudents.filter(s =>
+                     !archivedSearch ||
+                     `${s.first_name} ${s.middle_initial ? s.middle_initial + '. ' : ''}${s.last_name}`.toLowerCase().includes(archivedSearch.toLowerCase()) ||
+                     (s.email || '').toLowerCase().includes(archivedSearch.toLowerCase()) ||
+                     (s.usn || '').toLowerCase().includes(archivedSearch.toLowerCase()) ||
+                     (s.section_name || '').toLowerCase().includes(archivedSearch.toLowerCase())
+                   );
+                   const totalPages = Math.ceil(filtered.length / pageSize) || 1;
+                   const page = Math.min(studentArchivedPage, totalPages);
+                   const start = (page - 1) * pageSize;
+                   const paged = filtered.slice(start, start + pageSize);
+                   return (
+                     <>
+                       {paged.length > 0 ? (
+                         <table className="data-table">
+                           <thead>
+                             <tr>
+                               <th>ID</th>
+                               <th>Name</th>
+                               <th>Email</th>
+                               <th>USN</th>
+                               <th>Section</th>
+                               <th>Actions</th>
+                             </tr>
+                           </thead>
+                           <tbody>
+                             {paged.map((s) => (
+                               <tr key={s.id}>
+                                 <td>{s.id}</td>
+                                 <td>{[s.first_name, s.middle_initial ? s.middle_initial + '.' : '', s.last_name].filter(Boolean).join(' ')}</td>
+                                 <td>{s.email}</td>
+                                 <td>{s.usn || '—'}</td>
+                                 <td>{s.section_name || '—'}</td>
+                                 <td>
+                                   <button className="btn-sm btn-secondary" onClick={() => restoreStudent(s.id, [s.first_name, s.last_name].filter(Boolean).join(' '))}>Restore</button>
+                                 </td>
+                               </tr>
+                             ))}
+                           </tbody>
+                         </table>
+                       ) : (
+                         <p className="no-data">No archived students found</p>
+                       )}
+                       {totalPages > 1 && (
+                         <div className="pagination">
+                           <button className="btn-sm btn-secondary" disabled={page <= 1} onClick={() => setStudentArchivedPage(page - 1)}>← Prev</button>
+                           <span style={{ margin: '0 1rem', color: 'var(--text-light)' }}>Page {page} of {totalPages}</span>
+                           <button className="btn-sm btn-secondary" disabled={page >= totalPages} onClick={() => setStudentArchivedPage(page + 1)}>Next →</button>
+                         </div>
+                       )}
+                     </>
+                   );
+                 })()}
+               </div>
             </section>
           )}
 
@@ -1162,6 +2146,37 @@ const [sectionForm, setSectionForm] = useState({ section_name: '', course_id: ''
           )}
         </div>
       </div>
+
+      {confirmModal.show && (
+        <div className="modal-overlay">
+          <div className="modal" style={{ maxWidth: '450px' }}>
+            <div className="modal-header">
+              <h3>{confirmModal.title}</h3>
+              <button className="modal-close" onClick={closeConfirm}>×</button>
+            </div>
+            <p style={{ margin: '1rem 0', color: 'var(--text-light)', lineHeight: 1.6 }}>{confirmModal.message}</p>
+            <div className="modal-actions">
+              <button className="btn-secondary" onClick={closeConfirm}>Cancel</button>
+              <button className="btn-primary" onClick={() => { const fn = confirmModal.onConfirm; closeConfirm(); fn(); }}>Confirm</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {notifyModal.show && (
+        <div className="modal-overlay">
+          <div className="modal" style={{ maxWidth: '450px' }}>
+            <div className="modal-header">
+              <h3>{notifyModal.message.includes('✓') ? 'Success' : 'Error'}</h3>
+              <button className="modal-close" onClick={closeNotify}>×</button>
+            </div>
+            <p style={{ margin: '1rem 0', color: 'var(--text-light)', lineHeight: 1.6 }}>{notifyModal.message}</p>
+            <div className="modal-actions">
+              <button className="btn-primary" onClick={closeNotify}>OK</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
