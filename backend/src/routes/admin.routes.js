@@ -8,11 +8,17 @@ router.use(authenticate, authorize('admin'));
 router.get('/teachers', async (_req, res) => {
    try {
      const [teachers] = await pool.query("SELECT id, first_name, last_name, middle_initial, email FROM users WHERE role='teacher' AND archived=0");
-     const [subjects] = await pool.query('SELECT id, teacher_id, subject_name FROM subjects');
+     const [assignments] = await pool.query(
+       `SELECT tsa.teacher_id, s.subject_name, sec.section_name
+        FROM teacher_subject_sections tsa
+        JOIN subjects s ON s.id=tsa.subject_id
+        JOIN sections sec ON sec.id=tsa.section_id`
+     );
      
      const teachersWithSubjects = teachers.map(teacher => ({
        ...teacher,
-       subjects: subjects.filter(s => s.teacher_id === teacher.id).map(s => s.subject_name).join(', ')
+       subjects: assignments.filter(a => a.teacher_id === teacher.id)
+         .map(a => `${a.subject_name} (${a.section_name})`).join(', ')
      }));
      res.json(teachersWithSubjects);
    } catch (error) {
@@ -78,6 +84,25 @@ router.get('/teachers/:id/subjects', async (req, res) => {
     [req.params.id]
   );
   res.json(rows);
+});
+
+router.delete('/teachers/:id/permanent', async (req, res) => {
+  const conn = await pool.getConnection();
+  try {
+    await conn.query('START TRANSACTION');
+    await conn.query('UPDATE subjects SET teacher_id=NULL WHERE teacher_id=?', [req.params.id]);
+    await conn.query('DELETE FROM teacher_subject_sections WHERE teacher_id=?', [req.params.id]);
+    await conn.query('DELETE FROM notifications WHERE sender_id=?', [req.params.id]);
+    await conn.query("DELETE FROM users WHERE id=? AND role='teacher'", [req.params.id]);
+    await conn.query('COMMIT');
+    res.json({ message: 'Teacher permanently deleted' });
+  } catch (error) {
+    await conn.query('ROLLBACK');
+    console.error('Permanent delete teacher error:', error);
+    res.status(500).json({ message: error.message });
+  } finally {
+    conn.release();
+  }
 });
 
 router.put('/teachers/:id/subjects', async (req, res) => {
@@ -423,6 +448,72 @@ router.post('/students/:id/restore', async (req, res) => {
     res.json({ message: 'Student restored' });
   } catch (error) {
     console.error('Restore student error:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Teacher-Subject-Section Assignments CRUD
+router.get('/assignments', async (_req, res) => {
+  try {
+    const [rows] = await pool.query(
+      `SELECT tsa.id, tsa.teacher_id, tsa.subject_id, tsa.section_id,
+              CONCAT(u.first_name, ' ', u.last_name) AS teacher_name,
+              s.subject_name, sec.section_name
+       FROM teacher_subject_sections tsa
+       JOIN users u ON u.id=tsa.teacher_id
+       JOIN subjects s ON s.id=tsa.subject_id
+       JOIN sections sec ON sec.id=tsa.section_id
+       ORDER BY tsa.id DESC`
+    );
+    res.json(rows);
+  } catch (error) {
+    console.error('Get assignments error:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+router.post('/assignments', async (req, res) => {
+  const { teacher_id, subject_id, section_id } = req.body;
+  if (!teacher_id || !subject_id || !section_id) {
+    return res.status(400).json({ message: 'teacher_id, subject_id, and section_id are required' });
+  }
+  try {
+    await pool.query(
+      'INSERT IGNORE INTO teacher_subject_sections (teacher_id, subject_id, section_id) VALUES (?,?,?)',
+      [teacher_id, subject_id, section_id]
+    );
+    res.json({ message: 'Assignment created' });
+  } catch (error) {
+    console.error('Create assignment error:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+router.delete('/assignments/:id', async (req, res) => {
+  try {
+    await pool.query('DELETE FROM teacher_subject_sections WHERE id=?', [req.params.id]);
+    res.json({ message: 'Assignment removed' });
+  } catch (error) {
+    console.error('Delete assignment error:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+router.get('/teachers/:id/assignments', async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      `SELECT tsa.id, tsa.subject_id, tsa.section_id,
+              s.subject_name, sec.section_name
+       FROM teacher_subject_sections tsa
+       JOIN subjects s ON s.id=tsa.subject_id
+       JOIN sections sec ON sec.id=tsa.section_id
+       WHERE tsa.teacher_id=?
+       ORDER BY s.subject_name, sec.section_name`,
+      [req.params.id]
+    );
+    res.json(rows);
+  } catch (error) {
+    console.error('Get teacher assignments error:', error);
     res.status(500).json({ message: error.message });
   }
 });

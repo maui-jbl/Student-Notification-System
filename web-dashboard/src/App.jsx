@@ -171,6 +171,8 @@ const [teachers, setTeachers] = useState([]);
   const [detailPage, setDetailPage] = useState(1);
   const pageSize = 10;
   const [notifyModal, setNotifyModal] = useState({ show: false, message: '' });
+  const [teacherAllSubjects, setTeacherAllSubjects] = useState([]);
+  const [assignedCombos, setAssignedCombos] = useState([]);
 
   const notify = (msg) => {
     setNotifyModal({ show: true, message: msg });
@@ -181,10 +183,8 @@ const [teachers, setTeachers] = useState([]);
   };
 
   const [teacherForm, setTeacherForm] = useState({ first_name: '', last_name: '', middle_initial: '', email: '', password: '' });
-  const [teacherFormSubjects, setTeacherFormSubjects] = useState([]);
+
   const [editingTeacher, setEditingTeacher] = useState(null);
-  const [teacherSubjects, setTeacherSubjects] = useState([]);
-  const [allSubjects, setAllSubjects] = useState([]);
   const [confirmModal, setConfirmModal] = useState({ show: false, title: '', message: '', onConfirm: null });
 
   const showConfirm = (title, message, onConfirm) => {
@@ -202,7 +202,7 @@ const [sectionForm, setSectionForm] = useState({ section_name: '', course_id: ''
   const [archivedSections, setArchivedSections] = useState([]);
   const [sectionSearch, setSectionSearch] = useState('');
   const [sectionArchivedSearch, setSectionArchivedSearch] = useState('');
-  const [subjectForm, setSubjectForm] = useState({ subject_name: '', teacher_id: '' });
+  const [subjectForm, setSubjectForm] = useState({ subject_name: '' });
   const [editingSubject, setEditingSubject] = useState(null);
   const [archivedSubjects, setArchivedSubjects] = useState([]);
   const [subjectSearch, setSubjectSearch] = useState('');
@@ -223,6 +223,13 @@ const [sectionForm, setSectionForm] = useState({ section_name: '', course_id: ''
   const [subjectArchivedPage, setSubjectArchivedPage] = useState(1);
   const [studentPage, setStudentPage] = useState(1);
   const [studentArchivedPage, setStudentArchivedPage] = useState(1);
+  const [assignments, setAssignments] = useState([]);
+  const [assignmentForm, setAssignmentForm] = useState({ teacher_id: '', subject_id: '', section_id: '' });
+  const [assignmentSearch, setAssignmentSearch] = useState('');
+  const [assignmentPage, setAssignmentPage] = useState(1);
+  const [historyPage, setHistoryPage] = useState(1);
+  const [historySearch, setHistorySearch] = useState('');
+  const [historyStatusFilter, setHistoryStatusFilter] = useState('pending');
   const [courseForm, setCourseForm] = useState({ course_name: '', course_code: '' });
   const [editingCourse, setEditingCourse] = useState(null);
   const [notifForm, setNotifForm] = useState({
@@ -248,7 +255,6 @@ const [sectionForm, setSectionForm] = useState({ section_name: '', course_id: ''
       setTeachers(t.data);
       setSections(s.data);
       setSubjects(sub.data);
-      setAllSubjects(sub.data);
       setCourses(c.data);
       setStudents(stud.data);
     } catch (err) {
@@ -293,16 +299,51 @@ const [sectionForm, setSectionForm] = useState({ section_name: '', course_id: ''
     }
   };
 
+  const loadAssignments = async () => {
+    try {
+      const { data } = await axios.get(`${API}/admin/assignments`, { headers });
+      setAssignments(data);
+    } catch (err) {
+      console.error('loadAssignments error:', err);
+    }
+  };
+
+  const createAssignment = async (e) => {
+    e.preventDefault();
+    try {
+      await axios.post(`${API}/admin/assignments`, assignmentForm, { headers });
+      notify('Assignment created');
+      setAssignmentForm({ teacher_id: '', subject_id: '', section_id: '' });
+      loadAssignments();
+    } catch (err) {
+      notify(err.response?.data?.message || 'Failed to create assignment');
+    }
+  };
+
+  const deleteAssignment = async (id) => {
+    try {
+      await axios.delete(`${API}/admin/assignments/${id}`, { headers });
+      notify('Assignment removed');
+      loadAssignments();
+    } catch (err) {
+      notify('Failed to delete assignment');
+    }
+  };
+
   const loadTeacherData = async () => {
     try {
-      const [sec, mySub, his] = await Promise.all([
+      const [sec, mySub, his, allSub, combos] = await Promise.all([
         axios.get(`${API}/teacher/sections`, { headers }),
         axios.get(`${API}/teacher/my-subjects`, { headers }),
         axios.get(`${API}/teacher/notifications/history`, { headers }),
+        axios.get(`${API}/teacher/all-subjects`, { headers }),
+        axios.get(`${API}/teacher/assigned-combos`, { headers }),
       ]);
       setSections(sec.data);
       setSubjects(mySub.data);
       setHistory(his.data);
+      setTeacherAllSubjects(allSub.data);
+      setAssignedCombos(combos.data);
     } catch (err) {
       console.error('Error loading teacher data:', err);
       notify('Failed to load data');
@@ -320,13 +361,9 @@ const [sectionForm, setSectionForm] = useState({ section_name: '', course_id: ''
   const createTeacher = async (e) => {
     e.preventDefault();
     try {
-      const { data: created } = await axios.post(`${API}/admin/teachers`, teacherForm, { headers });
-      if (teacherFormSubjects.length > 0) {
-        await axios.put(`${API}/admin/teachers/${created.insertId}/subjects`, { subject_ids: teacherFormSubjects }, { headers });
-      }
+      await axios.post(`${API}/admin/teachers`, teacherForm, { headers });
       notify('✓ Teacher created successfully');
       setTeacherForm({ first_name: '', last_name: '', middle_initial: '', email: '', password: '' });
-      setTeacherFormSubjects([]);
       loadAdminData();
     } catch (err) {
       console.error('Create error:', err.response?.data || err.message);
@@ -343,7 +380,6 @@ const [sectionForm, setSectionForm] = useState({ section_name: '', course_id: ''
           delete updateData.password;
         }
         await axios.put(`${API}/admin/teachers/${editingTeacher.id}`, updateData, { headers });
-        await axios.put(`${API}/admin/teachers/${editingTeacher.id}/subjects`, { subject_ids: teacherSubjects }, { headers });
         notify('✓ Teacher updated successfully');
         setEditingTeacher(null);
         loadAdminData();
@@ -382,14 +418,21 @@ const [sectionForm, setSectionForm] = useState({ section_name: '', course_id: ''
     });
   };
 
+  const deleteTeacherPermanent = async (id, name) => {
+    showConfirm('Permanently Delete Teacher', `Permanently delete "${name}" and all their data? This cannot be undone!`, async () => {
+      try {
+        await axios.delete(`${API}/admin/teachers/${id}/permanent`, { headers });
+        notify('✓ Teacher permanently deleted');
+        loadArchivedTeachers();
+        loadAdminData();
+      } catch (err) {
+        notify('Failed to delete teacher: ' + (err.response?.data?.message || err.message));
+      }
+    });
+  };
+
   const openEditModal = async (teacher) => {
     setEditingTeacher({ ...teacher, password: '' });
-    const [subjRes, allSubjRes] = await Promise.all([
-      axios.get(`${API}/admin/teachers/${teacher.id}/subjects`, { headers }),
-      axios.get(`${API}/admin/subjects`, { headers }),
-    ]);
-    setTeacherSubjects(subjRes.data.map(s => s.id));
-    setAllSubjects(allSubjRes.data);
   };
 
   const getFullName = (t) => {
@@ -414,7 +457,7 @@ const [sectionForm, setSectionForm] = useState({ section_name: '', course_id: ''
     try {
       await axios.post(`${API}/admin/subjects`, subjectForm, { headers });
       notify('✓ Subject created successfully');
-      setSubjectForm({ subject_name: '', teacher_id: '' });
+      setSubjectForm({ subject_name: '' });
       loadAdminData();
     } catch (err) {
       console.error('Create subject error:', err.response?.data || err.message);
@@ -699,18 +742,24 @@ const [sectionForm, setSectionForm] = useState({ section_name: '', course_id: ''
                  >
                    🎓 Manage Subjects
                  </button>
+                 <button
+                   className={`tab ${activeTab === 'students' ? 'active' : ''}`}
+                   onClick={() => { setActiveTab('students'); loadArchivedStudents(); }}
+                 >
+                   👨‍🎓 Manage Students
+                 </button>
                 <button
-                  className={`tab ${activeTab === 'students' ? 'active' : ''}`}
-                  onClick={() => { setActiveTab('students'); loadArchivedStudents(); }}
+                  className={`tab ${activeTab === 'assignments' ? 'active' : ''}`}
+                  onClick={() => { setActiveTab('assignments'); loadAssignments(); }}
                 >
-                  👨‍🎓 Manage Students
+                  🔗 Manage Assignments
                 </button>
-              </>
-            )}
-          {user?.role === 'teacher' && (
+               </>
+             )}
+           {user?.role === 'teacher' && (
             <button
               className={`tab ${activeTab === 'notifications' ? 'active' : ''}`}
-              onClick={() => setActiveTab('notifications')}
+              onClick={() => { setActiveTab('notifications'); setHistoryPage(1); setHistorySearch(''); setHistoryStatusFilter('pending'); }}
             >
               📢 Send Notification
             </button>
@@ -765,21 +814,21 @@ const [sectionForm, setSectionForm] = useState({ section_name: '', course_id: ''
                 )}
                 {user?.role === 'teacher' && (
                   <>
-                    <div className="stat-card">
+                    <div className="stat-card" style={{ cursor: 'pointer' }} onClick={() => { setDashboardView(dashboardView === 'my-sections' ? null : 'my-sections'); setDetailSearch(''); setDetailPage(1); }}>
                       <div className="stat-icon">📚</div>
                       <div className="stat-content">
                         <p className="stat-label">My Sections</p>
                         <p className="stat-value">{sections.length}</p>
                       </div>
                     </div>
-                    <div className="stat-card">
+                    <div className="stat-card" style={{ cursor: 'pointer' }} onClick={() => { setDashboardView(dashboardView === 'my-subjects' ? null : 'my-subjects'); setDetailSearch(''); setDetailPage(1); }}>
                       <div className="stat-icon">🎓</div>
                       <div className="stat-content">
                         <p className="stat-label">My Subjects</p>
                         <p className="stat-value">{subjects.length}</p>
                       </div>
                     </div>
-                    <div className="stat-card">
+                    <div className="stat-card" style={{ cursor: 'pointer' }} onClick={() => { setDashboardView(dashboardView === 'sent-notifications' ? null : 'sent-notifications'); setDetailSearch(''); setDetailPage(1); }}>
                       <div className="stat-icon">📢</div>
                       <div className="stat-content">
                         <p className="stat-label">Sent Notifications</p>
@@ -798,11 +847,14 @@ const [sectionForm, setSectionForm] = useState({ section_name: '', course_id: ''
                     {dashboardView === 'subjects' && '🎓 Subjects'}
                     {dashboardView === 'courses' && '📘 Courses'}
                     {dashboardView === 'students' && '👨‍🎓 Students'}
+                    {dashboardView === 'my-sections' && '📚 My Sections'}
+                    {dashboardView === 'my-subjects' && '🎓 My Subjects'}
+                    {dashboardView === 'sent-notifications' && '📢 Sent Notifications'}
                   </h3>
                   <input
                     type="text"
                     className="form-control search-input"
-                    placeholder={`Search ${dashboardView}...`}
+                    placeholder={`Search ${dashboardView === 'sent-notifications' ? 'notifications' : dashboardView === 'my-sections' ? 'sections' : dashboardView === 'my-subjects' ? 'subjects' : dashboardView}...`}
                     value={detailSearch}
                     onChange={(e) => { setDetailSearch(e.target.value); setDetailPage(1); }}
                   />
@@ -813,6 +865,9 @@ const [sectionForm, setSectionForm] = useState({ section_name: '', course_id: ''
                     else if (dashboardView === 'subjects') data = subjects.filter(s => !detailSearch || (s.subject_name||'').toLowerCase().includes(detailSearch.toLowerCase()) || (s.teacher_name||'').toLowerCase().includes(detailSearch.toLowerCase()));
                     else if (dashboardView === 'courses') data = courses.filter(c => !detailSearch || (c.course_name||'').toLowerCase().includes(detailSearch.toLowerCase()) || (c.course_code||'').toLowerCase().includes(detailSearch.toLowerCase()));
                     else if (dashboardView === 'students') data = students.filter(s => !detailSearch || `${s.first_name} ${s.middle_initial? s.middle_initial+'. ' : ''}${s.last_name}`.toLowerCase().includes(detailSearch.toLowerCase()) || (s.email||'').toLowerCase().includes(detailSearch.toLowerCase()) || (s.usn||'').toLowerCase().includes(detailSearch.toLowerCase()) || (s.section_name||'').toLowerCase().includes(detailSearch.toLowerCase()));
+                    else if (dashboardView === 'my-sections') data = sections.filter(s => !detailSearch || (s.section_name||'').toLowerCase().includes(detailSearch.toLowerCase()));
+                    else if (dashboardView === 'my-subjects') data = subjects.filter(s => !detailSearch || (s.subject_name||'').toLowerCase().includes(detailSearch.toLowerCase()));
+                    else if (dashboardView === 'sent-notifications') data = history.filter(h => !detailSearch || (h.title||'').toLowerCase().includes(detailSearch.toLowerCase()) || (h.section_name||'').toLowerCase().includes(detailSearch.toLowerCase()) || (h.subject_name||'').toLowerCase().includes(detailSearch.toLowerCase()));
                     const totalPages = Math.ceil(data.length / pageSize) || 1;
                     const page = Math.min(detailPage, totalPages);
                     const start = (page - 1) * pageSize;
@@ -828,6 +883,9 @@ const [sectionForm, setSectionForm] = useState({ section_name: '', course_id: ''
                               {dashboardView === 'subjects' && <><th>Subject</th><th>Teacher</th></>}
                               {dashboardView === 'courses' && <><th>Course Name</th><th>Code</th></>}
                               {dashboardView === 'students' && <><th>Name</th><th>Email</th><th>USN</th><th>Section</th><th>Subjects</th></>}
+                              {dashboardView === 'my-sections' && <><th>Section Name</th></>}
+                              {dashboardView === 'my-subjects' && <><th>Subject Name</th></>}
+                              {dashboardView === 'sent-notifications' && <><th>Title</th><th>Section / Subject</th><th>Priority</th><th>Date Sent</th><th>Scheduled</th><th>Status</th></>}
                             </tr>
                           </thead>
                           <tbody>
@@ -836,7 +894,10 @@ const [sectionForm, setSectionForm] = useState({ section_name: '', course_id: ''
                               dashboardView === 'sections' ? paged.map(s => <tr key={s.id}><td>{s.id}</td><td>{s.section_name}</td><td>{s.course_code || '—'}</td></tr>) :
                               dashboardView === 'subjects' ? paged.map(s => <tr key={s.id}><td>{s.id}</td><td>{s.subject_name}</td><td>{s.teacher_name || 'N/A'}</td></tr>) :
                               dashboardView === 'courses' ? paged.map(c => <tr key={c.id}><td>{c.id}</td><td>{c.course_name}</td><td>{c.course_code}</td></tr>) :
-                              dashboardView === 'students' ? paged.map(s => <tr key={s.id}><td>{s.id}</td><td>{[s.first_name, s.middle_initial? s.middle_initial+'.' : '', s.last_name].filter(Boolean).join(' ')}</td><td>{s.email}</td><td>{s.usn || '—'}</td><td>{s.section_name || '—'}</td><td>{s.subjects || '—'}</td></tr>) : null
+                              dashboardView === 'students' ? paged.map(s => <tr key={s.id}><td>{s.id}</td><td>{[s.first_name, s.middle_initial? s.middle_initial+'.' : '', s.last_name].filter(Boolean).join(' ')}</td><td>{s.email}</td><td>{s.usn || '—'}</td><td>{s.section_name || '—'}</td><td>{s.subjects || '—'}</td></tr>) :
+                              dashboardView === 'my-sections' ? paged.map(s => <tr key={s.id}><td>{s.id}</td><td>{s.section_name}</td></tr>) :
+                              dashboardView === 'my-subjects' ? paged.map(s => <tr key={s.id}><td>{s.id}</td><td>{s.subject_name}</td></tr>) :
+                              dashboardView === 'sent-notifications' ? paged.map(h => <tr key={h.id}><td>{h.id}</td><td>{h.title}</td><td>{h.section_name} / {h.subject_name}</td><td><span className={`priority-badge priority-${h.priority.toLowerCase()}`}>{h.priority}</span></td><td>{new Date(h.created_at).toLocaleString()}</td><td>{h.scheduled_at ? new Date(h.scheduled_at).toLocaleString() : '—'}</td><td>{h.status === 'scheduled' && <span className="priority-badge priority-exam">Scheduled</span>}{h.status === 'pending' && <span className="priority-badge priority-exam">Pending</span>}{h.status === 'sent' && <span className="priority-badge priority-normal">Sent</span>}{h.status === 'delivered' && <span className="priority-badge priority-success">Delivered</span>}{h.status === 'cancelled' && <span className="priority-badge priority-urgent">Cancelled</span>}</td></tr>) : null
                             ) : (
                               <tr><td colSpan={10}><p className="no-data">No results</p></td></tr>
                             )}
@@ -916,27 +977,6 @@ const [sectionForm, setSectionForm] = useState({ section_name: '', course_id: ''
                        required
                      />
                    </div>
-<div className="form-group">
-                      <label>Assign Subjects</label>
-                      <div className="subject-checklist">
-                        {subjects.map((s) => (
-                          <label key={s.id} className="checkbox-label">
-                            <input
-                              type="checkbox"
-                              checked={teacherFormSubjects.includes(s.id)}
-                              onChange={(e) => {
-                                if (e.target.checked) {
-                                  setTeacherFormSubjects([...teacherFormSubjects, s.id]);
-                                } else {
-                                  setTeacherFormSubjects(teacherFormSubjects.filter(id => id !== s.id));
-                                }
-                              }}
-                            />
-                            {s.subject_name}
-                          </label>
-                        ))}
-                      </div>
-                    </div>
                    <button type="submit" className="btn-primary">Save Teacher</button>
                  </form>
               </div>
@@ -1042,6 +1082,7 @@ const [sectionForm, setSectionForm] = useState({ section_name: '', course_id: ''
                                 <td>{t.email}</td>
                                 <td>
                                   <button className="btn-sm btn-secondary" onClick={() => restoreTeacher(t.id, getFullName(t))}>Restore</button>
+                                  <button className="btn-sm btn-danger" style={{ marginLeft: '0.5rem' }} onClick={() => deleteTeacherPermanent(t.id, getFullName(t))}>Delete</button>
                                 </td>
                               </tr>
                             ))}
@@ -1120,27 +1161,6 @@ const [sectionForm, setSectionForm] = useState({ section_name: '', course_id: ''
                       onChange={(e) => setEditingTeacher({ ...editingTeacher, password: e.target.value })}
                     />
                   </div>
-<div className="form-group">
-                     <label>Assign Subjects</label>
-                     <div className="subject-checklist">
-                       {allSubjects.map((s) => (
-                         <label key={s.id} className="checkbox-label">
-                           <input
-                             type="checkbox"
-                             checked={teacherSubjects.includes(s.id)}
-                             onChange={(e) => {
-                               if (e.target.checked) {
-                                 setTeacherSubjects([...teacherSubjects, s.id]);
-                               } else {
-                                 setTeacherSubjects(teacherSubjects.filter(id => id !== s.id));
-                               }
-                             }}
-                           />
-                           {s.subject_name}
-                         </label>
-                       ))}
-                     </div>
-                   </div>
                   <div className="modal-actions">
                     <button type="button" className="btn-secondary" onClick={() => setEditingTeacher(null)}>Cancel</button>
                     <button type="submit" className="btn-primary">Save Changes</button>
@@ -1489,21 +1509,6 @@ const [sectionForm, setSectionForm] = useState({ section_name: '', course_id: ''
                         required
                       />
                     </div>
-                    <div className="form-group">
-                      <label>Assign Teacher</label>
-                      <select
-                        value={subjectForm.teacher_id}
-                        onChange={(e) => setSubjectForm({ ...subjectForm, teacher_id: e.target.value })}
-                        required
-                      >
-                        <option value="">Select a teacher</option>
-                        {teachers.map((t) => (
-                          <option key={t.id} value={t.id}>
-                            {getFullName(t)}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
                   </div>
                   <button type="submit" className="btn-primary">Save Subject</button>
                 </form>
@@ -1645,21 +1650,6 @@ const [sectionForm, setSectionForm] = useState({ section_name: '', course_id: ''
                           onChange={(e) => setEditingSubject({ ...editingSubject, subject_name: e.target.value })}
                           required
                         />
-                      </div>
-                      <div className="form-group">
-                        <label>Assign Teacher</label>
-                        <select
-                          value={editingSubject.teacher_id || ''}
-                          onChange={(e) => setEditingSubject({ ...editingSubject, teacher_id: e.target.value })}
-                          required
-                        >
-                          <option value="">Select a teacher</option>
-                          {teachers.map((t) => (
-                            <option key={t.id} value={t.id}>
-                              {getFullName(t)}
-                            </option>
-                          ))}
-                        </select>
                       </div>
                       <div className="modal-actions">
                         <button type="button" className="btn-secondary" onClick={() => setEditingSubject(null)}>Cancel</button>
@@ -2017,6 +2007,137 @@ const [sectionForm, setSectionForm] = useState({ section_name: '', course_id: ''
                    );
                  })()}
                </div>
+             </section>
+          )}
+
+          {/* Admin: Manage Assignments */}
+          {user?.role === 'admin' && activeTab === 'assignments' && (
+            <section className="form-section">
+              <h2>🔗 Manage Teacher-Subject-Section Assignments</h2>
+              <div className="card">
+                <h4>Create Assignment</h4>
+                <form onSubmit={createAssignment}>
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label>Teacher</label>
+                      <select
+                        value={assignmentForm.teacher_id}
+                        onChange={(e) => setAssignmentForm({ ...assignmentForm, teacher_id: e.target.value })}
+                        required
+                      >
+                        <option value="">Select teacher</option>
+                        {teachers.map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.first_name} {t.last_name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <label>Subject</label>
+                      <select
+                        value={assignmentForm.subject_id}
+                        onChange={(e) => setAssignmentForm({ ...assignmentForm, subject_id: e.target.value })}
+                        required
+                      >
+                        <option value="">Select subject</option>
+                        {subjects.map((s) => (
+                          <option key={s.id} value={s.id}>{s.subject_name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <label>Section</label>
+                      <select
+                        value={assignmentForm.section_id}
+                        onChange={(e) => setAssignmentForm({ ...assignmentForm, section_id: e.target.value })}
+                        required
+                      >
+                        <option value="">Select section</option>
+                        {sections.map((sec) => (
+                          <option key={sec.id} value={sec.id}>{sec.section_name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="form-group" style={{ alignSelf: 'flex-end' }}>
+                      <button type="submit" className="btn-primary">Assign</button>
+                    </div>
+                  </div>
+                </form>
+              </div>
+              <div className="card mt-4">
+                <input
+                  type="text"
+                  className="form-control search-input"
+                  placeholder="Search assignments..."
+                  value={assignmentSearch}
+                  onChange={(e) => { setAssignmentSearch(e.target.value); setAssignmentPage(1); }}
+                />
+                <div className="table-container">
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>Teacher</th>
+                        <th>Subject</th>
+                        <th>Section</th>
+                        <th>Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(() => {
+                        if (assignments.length === 0) {
+                          return <tr><td colSpan="4" style={{ textAlign: 'center', padding: '20px' }}>No assignments yet</td></tr>;
+                        }
+                        const filtered = assignments.filter(a =>
+                          !assignmentSearch ||
+                          a.teacher_name?.toLowerCase().includes(assignmentSearch.toLowerCase()) ||
+                          a.subject_name?.toLowerCase().includes(assignmentSearch.toLowerCase()) ||
+                          a.section_name?.toLowerCase().includes(assignmentSearch.toLowerCase())
+                        );
+                        if (filtered.length === 0) {
+                          return <tr><td colSpan="4" style={{ textAlign: 'center', padding: '20px' }}>No matches found</td></tr>;
+                        }
+                        const totalPages = Math.ceil(filtered.length / 10) || 1;
+                        const page = Math.min(assignmentPage, totalPages);
+                        const start = (page - 1) * 10;
+                        return filtered.slice(start, start + 10).map((a) => (
+                          <tr key={a.id}>
+                            <td>{a.teacher_name}</td>
+                            <td>{a.subject_name}</td>
+                            <td>{a.section_name}</td>
+                            <td>
+                              <button
+                                className="btn-sm btn-danger"
+                                onClick={() => showConfirm('Remove Assignment', `Remove ${a.teacher_name} from ${a.subject_name} - ${a.section_name}?`, () => deleteAssignment(a.id))}
+                              >
+                                Remove
+                              </button>
+                            </td>
+                          </tr>
+                        ));
+                      })()}
+                    </tbody>
+                  </table>
+                </div>
+                {(() => {
+                  if (assignments.length === 0) return null;
+                  const filtered = assignments.filter(a =>
+                    !assignmentSearch ||
+                    a.teacher_name?.toLowerCase().includes(assignmentSearch.toLowerCase()) ||
+                    a.subject_name?.toLowerCase().includes(assignmentSearch.toLowerCase()) ||
+                    a.section_name?.toLowerCase().includes(assignmentSearch.toLowerCase())
+                  );
+                  if (filtered.length === 0) return null;
+                  const totalPages = Math.ceil(filtered.length / 10) || 1;
+                  return (
+                    <div className="pagination">
+                      <button className="btn-sm btn-secondary" disabled={assignmentPage <= 1} onClick={() => setAssignmentPage(assignmentPage - 1)}>← Prev</button>
+                      <span>Page {assignmentPage} of {totalPages}</span>
+                      <button className="btn-sm btn-secondary" disabled={assignmentPage >= totalPages} onClick={() => setAssignmentPage(assignmentPage + 1)}>Next →</button>
+                    </div>
+                  );
+                })()}
+              </div>
             </section>
           )}
 
@@ -2049,6 +2170,25 @@ const [sectionForm, setSectionForm] = useState({ section_name: '', course_id: ''
 
                   <div className="form-row">
                     <div className="form-group">
+                      <label>Select Section</label>
+                      <select
+                        value={notifForm.section_id}
+                        onChange={(e) => {
+                          const secId = Number(e.target.value);
+                          setNotifForm({ ...notifForm, section_id: secId, subject_id: '' });
+                        }}
+                        required
+                      >
+                        <option value="">Select a section</option>
+                        {sections.map((sec) => (
+                          <option key={sec.id} value={sec.id}>
+                            {sec.section_name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="form-group">
                       <label>Select Subject</label>
                       <select
                         value={notifForm.subject_id}
@@ -2056,27 +2196,14 @@ const [sectionForm, setSectionForm] = useState({ section_name: '', course_id: ''
                         required
                       >
                         <option value="">Select a subject</option>
-                        {subjects.map((s) => (
-                          <option key={s.id} value={s.id}>
-                            {s.subject_name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div className="form-group">
-                      <label>Select Section</label>
-                      <select
-                        value={notifForm.section_id}
-                        onChange={(e) => setNotifForm({ ...notifForm, section_id: Number(e.target.value) })}
-                        required
-                      >
-                        <option value="">Select a section</option>
-                        {sections.map((s) => (
-                          <option key={s.id} value={s.id}>
-                            {s.section_name}
-                          </option>
-                        ))}
+                        {assignedCombos
+                          .filter(c => !notifForm.section_id || c.section_id === notifForm.section_id)
+                          .filter((c, i, arr) => arr.findIndex(x => x.subject_id === c.subject_id) === i)
+                          .map((c) => (
+                            <option key={c.subject_id} value={c.subject_id}>
+                              {c.subject_name}
+                            </option>
+                          ))}
                       </select>
                     </div>
                   </div>
@@ -2111,36 +2238,181 @@ const [sectionForm, setSectionForm] = useState({ section_name: '', course_id: ''
 
               <div className="card mt-4">
                 <h3>📜 Notification History</h3>
-                {history.length > 0 ? (
-                  <table className="data-table">
-                    <thead>
-                      <tr>
-                        <th>Title</th>
-                        <th>Section / Subject</th>
-                        <th>Priority</th>
-                        <th>Date</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {history.map((h) => (
-                        <tr key={h.id}>
-                          <td>{h.title}</td>
-                          <td>
-                            {h.section_name} / {h.subject_name}
-                          </td>
-                          <td>
-                            <span className={`priority-badge priority-${h.priority.toLowerCase()}`}>
-                              {h.priority}
-                            </span>
-                          </td>
-                          <td>{new Date(h.created_at).toLocaleDateString()}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                ) : (
-                  <p className="no-data">No notifications sent yet</p>
-                )}
+                <div className="history-tabs">
+                  {(() => {
+                    const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+                    const pendingCount = history.filter(h => h.status === 'scheduled' || h.status === 'pending').length;
+                    const completedCount = history.filter(h => (h.status === 'sent' || h.status === 'delivered') && new Date(h.created_at).getTime() >= cutoff).length;
+                    const cancelledCount = history.filter(h => h.status === 'cancelled' && new Date(h.created_at).getTime() >= cutoff).length;
+                    const archivedCount = history.filter(h => (h.status === 'sent' || h.status === 'delivered' || h.status === 'cancelled') && new Date(h.created_at).getTime() < cutoff).length;
+                    return (
+                      <>
+                        <button
+                          className={`tab ${historyStatusFilter === 'pending' ? 'active' : ''}`}
+                          onClick={() => { setHistoryStatusFilter('pending'); setHistoryPage(1); setHistorySearch(''); }}
+                        >
+                          ⏳ Pending ({pendingCount})
+                        </button>
+                        <button
+                          className={`tab ${historyStatusFilter === 'completed' ? 'active' : ''}`}
+                          onClick={() => { setHistoryStatusFilter('completed'); setHistoryPage(1); setHistorySearch(''); }}
+                        >
+                          ✅ Completed ({completedCount})
+                        </button>
+                        <button
+                          className={`tab ${historyStatusFilter === 'cancelled' ? 'active' : ''}`}
+                          onClick={() => { setHistoryStatusFilter('cancelled'); setHistoryPage(1); setHistorySearch(''); }}
+                        >
+                          ❌ Cancelled ({cancelledCount})
+                        </button>
+                        <button
+                          className={`tab ${historyStatusFilter === 'archived' ? 'active' : ''}`}
+                          onClick={() => { setHistoryStatusFilter('archived'); setHistoryPage(1); setHistorySearch(''); }}
+                        >
+                          🗃️ Archived ({archivedCount})
+                        </button>
+                      </>
+                    );
+                  })()}
+                </div>
+                <input
+                  type="text"
+                  className="form-control search-input"
+                  placeholder="Search by title, section, or subject..."
+                  value={historySearch}
+                  onChange={(e) => { setHistorySearch(e.target.value); setHistoryPage(1); }}
+                />
+                {(() => {
+                  const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+                  const filtered = history.filter(h => {
+                    const createdTime = new Date(h.created_at).getTime();
+                    const isRecent = createdTime >= cutoff;
+                    const isOld = createdTime < cutoff;
+                    const matchesStatus =
+                      historyStatusFilter === 'pending' ? (h.status === 'scheduled' || h.status === 'pending') :
+                      historyStatusFilter === 'completed' ? ((h.status === 'sent' || h.status === 'delivered') && isRecent) :
+                      historyStatusFilter === 'cancelled' ? (h.status === 'cancelled' && isRecent) :
+                      (h.status === 'sent' || h.status === 'delivered' || h.status === 'cancelled') && isOld;
+                    const matchesSearch = !historySearch ||
+                      (h.title || '').toLowerCase().includes(historySearch.toLowerCase()) ||
+                      (h.section_name || '').toLowerCase().includes(historySearch.toLowerCase()) ||
+                      (h.subject_name || '').toLowerCase().includes(historySearch.toLowerCase());
+                    return matchesStatus && matchesSearch;
+                  });
+                  const totalPages = Math.ceil(filtered.length / pageSize) || 1;
+                  const page = Math.min(historyPage, totalPages);
+                  const start = (page - 1) * pageSize;
+                  const paged = filtered.slice(start, start + pageSize);
+                  const isPending = historyStatusFilter === 'pending';
+                  const showDelete = historyStatusFilter === 'cancelled' || historyStatusFilter === 'archived';
+                  const label = historyStatusFilter === 'archived' ? 'archived' : historyStatusFilter;
+                  return (
+                    <>
+                      {paged.length > 0 ? (
+                        <table className="data-table">
+                          <thead>
+                            <tr>
+                              <th>Title</th>
+                              <th>Section / Subject</th>
+                              <th>Priority</th>
+                              <th>Date Sent</th>
+                              <th>Scheduled</th>
+                              <th>Status</th>
+                              {(isPending || showDelete) && <th>Actions</th>}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {paged.map((h) => (
+                              <tr key={h.id}>
+                                <td>{h.title}</td>
+                                <td>
+                                  {h.section_name} / {h.subject_name}
+                                </td>
+                                <td>
+                                  <span className={`priority-badge priority-${h.priority.toLowerCase()}`}>
+                                    {h.priority}
+                                  </span>
+                                </td>
+                                <td>{new Date(h.created_at).toLocaleString()}</td>
+                                <td>{h.scheduled_at ? new Date(h.scheduled_at).toLocaleString() : '—'}</td>
+                                <td>
+                                  {h.status === 'scheduled' && <span className="priority-badge priority-exam">Scheduled</span>}
+                                  {h.status === 'pending' && <span className="priority-badge priority-exam">Pending</span>}
+                                  {h.status === 'sent' && <span className="priority-badge priority-normal">Sent</span>}
+                                  {h.status === 'delivered' && <span className="priority-badge priority-success">Delivered</span>}
+                                  {h.status === 'cancelled' && <span className="priority-badge priority-urgent">Cancelled</span>}
+                                </td>
+                                {isPending && (
+                                  <td>
+                                    <button
+                                      className="btn-sm btn-success"
+                                      title="Mark as completed"
+                                      onClick={async () => {
+                                        try {
+                                          await axios.put(`${API}/teacher/notifications/${h.id}/complete`, {}, { headers });
+                                          notify('✓ Notification marked as completed');
+                                          loadTeacherData();
+                                        } catch (err) {
+                                          notify('Failed to complete: ' + (err.response?.data?.message || err.message));
+                                        }
+                                      }}
+                                      style={{ marginRight: '0.5rem' }}
+                                    >
+                                      ✓
+                                    </button>
+                                    <button
+                                      className="btn-sm btn-danger"
+                                      title="Cancel notification"
+                                      onClick={async () => {
+                                        try {
+                                          await axios.put(`${API}/teacher/notifications/${h.id}/cancel`, {}, { headers });
+                                          notify('✓ Notification cancelled');
+                                          loadTeacherData();
+                                        } catch (err) {
+                                          notify('Failed to cancel: ' + (err.response?.data?.message || err.message));
+                                        }
+                                      }}
+                                    >
+                                      ✕
+                                    </button>
+                                  </td>
+                                )}
+                                {showDelete && h.status === 'cancelled' && (
+                                  <td>
+                                    <button
+                                      className="btn-sm btn-danger"
+                                      title="Delete notification"
+                                      onClick={async () => {
+                                        try {
+                                          await axios.delete(`${API}/teacher/notifications/${h.id}`, { headers });
+                                          notify('✓ Notification deleted');
+                                          loadTeacherData();
+                                        } catch (err) {
+                                          notify('Failed to delete: ' + (err.response?.data?.message || err.message));
+                                        }
+                                      }}
+                                    >
+                                      🗑️
+                                    </button>
+                                  </td>
+                                )}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      ) : (
+                        <p className="no-data">No {label} notifications found</p>
+                      )}
+                      {totalPages > 1 && (
+                        <div className="pagination">
+                          <button className="btn-sm btn-secondary" disabled={page <= 1} onClick={() => setHistoryPage(page - 1)}>← Prev</button>
+                          <span style={{ margin: '0 1rem', color: 'var(--text-light)' }}>Page {page} of {totalPages}</span>
+                          <button className="btn-sm btn-secondary" disabled={page >= totalPages} onClick={() => setHistoryPage(page + 1)}>Next →</button>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
             </section>
           )}

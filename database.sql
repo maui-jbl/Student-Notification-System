@@ -48,6 +48,17 @@ CREATE TABLE IF NOT EXISTS student_subjects (
   FOREIGN KEY (subject_id) REFERENCES subjects(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS teacher_subject_sections (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  teacher_id INT NOT NULL,
+  subject_id INT NOT NULL,
+  section_id INT NOT NULL,
+  UNIQUE KEY uq_assignment (teacher_id, subject_id, section_id),
+  FOREIGN KEY (teacher_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (subject_id) REFERENCES subjects(id) ON DELETE CASCADE,
+  FOREIGN KEY (section_id) REFERENCES sections(id) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS fcm_tokens (
   id INT AUTO_INCREMENT PRIMARY KEY,
   student_id INT NOT NULL,
@@ -66,7 +77,7 @@ CREATE TABLE IF NOT EXISTS notifications (
   section_id INT NOT NULL,
   priority ENUM('Urgent','Normal','Exam','Event') DEFAULT 'Normal',
   scheduled_at DATETIME NULL,
-  status ENUM('scheduled','sent','delivered') DEFAULT 'sent',
+  status ENUM('pending','scheduled','sent','delivered','cancelled') DEFAULT 'pending',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE CASCADE,
   FOREIGN KEY (subject_id) REFERENCES subjects(id) ON DELETE CASCADE,
