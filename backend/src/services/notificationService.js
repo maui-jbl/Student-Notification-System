@@ -25,7 +25,11 @@ async function dispatchNotification(notification) {
     created_at: notification.created_at,
   };
 
-  await publishNotification(topic, mqttPayload);
+  try {
+    await publishNotification(topic, mqttPayload);
+  } catch (mqttErr) {
+    console.error('[dispatchNotification] MQTT publish failed:', mqttErr.message);
+  }
 
   const [tokenRows] = await pool.query(
     `SELECT DISTINCT ft.fcm_token

@@ -458,11 +458,12 @@ router.get('/assignments', async (_req, res) => {
     const [rows] = await pool.query(
       `SELECT tsa.id, tsa.teacher_id, tsa.subject_id, tsa.section_id,
               CONCAT(u.first_name, ' ', u.last_name) AS teacher_name,
-              s.subject_name, sec.section_name
+              s.subject_name, sec.section_name, c.course_code
        FROM teacher_subject_sections tsa
        JOIN users u ON u.id=tsa.teacher_id
        JOIN subjects s ON s.id=tsa.subject_id
        JOIN sections sec ON sec.id=tsa.section_id
+       LEFT JOIN courses c ON c.id=sec.course_id
        ORDER BY tsa.id DESC`
     );
     res.json(rows);
@@ -485,6 +486,34 @@ router.post('/assignments', async (req, res) => {
     res.json({ message: 'Assignment created' });
   } catch (error) {
     console.error('Create assignment error:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+router.put('/assignments/:id', async (req, res) => {
+  const { teacher_id, subject_id, section_id } = req.body;
+  if (!teacher_id || !subject_id || !section_id) {
+    return res.status(400).json({ message: 'teacher_id, subject_id, and section_id are required' });
+  }
+  try {
+    const connection = await pool.getConnection();
+    await connection.beginTransaction();
+    try {
+      await connection.query('DELETE FROM teacher_subject_sections WHERE id=?', [req.params.id]);
+      await connection.query(
+        'INSERT IGNORE INTO teacher_subject_sections (teacher_id, subject_id, section_id) VALUES (?,?,?)',
+        [teacher_id, subject_id, section_id]
+      );
+      await connection.commit();
+      res.json({ message: 'Assignment updated' });
+    } catch (err) {
+      await connection.rollback();
+      throw err;
+    } finally {
+      connection.release();
+    }
+  } catch (error) {
+    console.error('Update assignment error:', error);
     res.status(500).json({ message: error.message });
   }
 });

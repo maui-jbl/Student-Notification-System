@@ -172,6 +172,9 @@ const [teachers, setTeachers] = useState([]);
   const pageSize = 10;
   const [notifyModal, setNotifyModal] = useState({ show: false, message: '' });
   const [teacherAllSubjects, setTeacherAllSubjects] = useState([]);
+  const [studentNotifications, setStudentNotifications] = useState([]);
+  const [studentEnrolledSubjects, setStudentEnrolledSubjects] = useState([]);
+  const [studentSubjectFilter, setStudentSubjectFilter] = useState('all');
   const [assignedCombos, setAssignedCombos] = useState([]);
 
   const notify = (msg) => {
@@ -213,6 +216,8 @@ const [sectionForm, setSectionForm] = useState({ section_name: '', course_id: ''
   const [editingStudent, setEditingStudent] = useState(null);
   const [studentSubjects, setStudentSubjects] = useState([]);
   const [studentSearch, setStudentSearch] = useState('');
+  const [studentSubjectSearch, setStudentSubjectSearch] = useState('');
+  const [editStudentSubjectSearch, setEditStudentSubjectSearch] = useState('');
   const [archivedSearch, setArchivedSearch] = useState('');
   const [teacherPage, setTeacherPage] = useState(1);
   const [teacherArchivedPage, setTeacherArchivedPage] = useState(1);
@@ -225,6 +230,7 @@ const [sectionForm, setSectionForm] = useState({ section_name: '', course_id: ''
   const [studentArchivedPage, setStudentArchivedPage] = useState(1);
   const [assignments, setAssignments] = useState([]);
   const [assignmentForm, setAssignmentForm] = useState({ teacher_id: '', subject_id: '', section_id: '' });
+  const [editingAssignment, setEditingAssignment] = useState(null);
   const [assignmentSearch, setAssignmentSearch] = useState('');
   const [assignmentPage, setAssignmentPage] = useState(1);
   const [historyPage, setHistoryPage] = useState(1);
@@ -320,6 +326,17 @@ const [sectionForm, setSectionForm] = useState({ section_name: '', course_id: ''
     }
   };
 
+  const updateAssignment = async () => {
+    try {
+      await axios.put(`${API}/admin/assignments/${editingAssignment.id}`, editingAssignment, { headers });
+      notify('Assignment updated');
+      setEditingAssignment(null);
+      loadAssignments();
+    } catch (err) {
+      notify(err.response?.data?.message || 'Failed to update assignment');
+    }
+  };
+
   const deleteAssignment = async (id) => {
     try {
       await axios.delete(`${API}/admin/assignments/${id}`, { headers });
@@ -350,11 +367,45 @@ const [sectionForm, setSectionForm] = useState({ section_name: '', course_id: ''
     }
   };
 
+  const loadStudentData = async () => {
+    try {
+      const [notifRes, subjRes] = await Promise.all([
+        axios.get(`${API}/student/notifications`, { headers }),
+        axios.get(`${API}/student/subjects`, { headers }),
+      ]);
+      setStudentNotifications(notifRes.data);
+      setStudentEnrolledSubjects(subjRes.data);
+    } catch (err) {
+      console.error('Error loading student data:', err);
+      notify('Failed to load notifications');
+    }
+  };
+
+  const markAsRead = async (id) => {
+    try {
+      await axios.post(`${API}/student/notifications/${id}/read`, {}, { headers });
+      loadStudentData();
+    } catch (err) {
+      console.error('Mark as read error:', err);
+    }
+  };
+
+  const markAsUnread = async (id) => {
+    try {
+      await axios.post(`${API}/student/notifications/${id}/unread`, {}, { headers });
+      loadStudentData();
+    } catch (err) {
+      console.error('Mark as unread error:', err);
+    }
+  };
+
   useEffect(() => {
     if (user?.role === 'admin') {
       loadAdminData();
     } else if (user?.role === 'teacher') {
       loadTeacherData();
+    } else if (user?.role === 'student') {
+      loadStudentData();
     }
   }, [user?.role, user?.id]);
 
@@ -756,15 +807,23 @@ const [sectionForm, setSectionForm] = useState({ section_name: '', course_id: ''
                 </button>
                </>
              )}
-           {user?.role === 'teacher' && (
-            <button
-              className={`tab ${activeTab === 'notifications' ? 'active' : ''}`}
-              onClick={() => { setActiveTab('notifications'); setHistoryPage(1); setHistorySearch(''); setHistoryStatusFilter('pending'); }}
-            >
-              📢 Send Notification
-            </button>
-          )}
-        </div>
+            {user?.role === 'teacher' && (
+             <button
+               className={`tab ${activeTab === 'notifications' ? 'active' : ''}`}
+               onClick={() => { setActiveTab('notifications'); setHistoryPage(1); setHistorySearch(''); setHistoryStatusFilter('pending'); }}
+             >
+               📢 Send Notification
+             </button>
+           )}
+           {user?.role === 'student' && (
+             <button
+               className={`tab ${activeTab === 'student-notifications' ? 'active' : ''}`}
+               onClick={() => setActiveTab('student-notifications')}
+             >
+               📩 My Notifications
+             </button>
+           )}
+         </div>
 
         <div className="dashboard-content">
 
@@ -838,6 +897,36 @@ const [sectionForm, setSectionForm] = useState({ section_name: '', course_id: ''
                   </>
                 )}
               </div>
+
+              {user?.role === 'student' && (
+                <div className="card" style={{ marginTop: '1.5rem' }}>
+                  <h3>📋 My Profile</h3>
+                  <p><strong>Section:</strong> {user?.section_name || '—'}</p>
+                  <h3 style={{ marginTop: '1rem' }}>📚 My Subjects</h3>
+                  {studentEnrolledSubjects.length === 0 ? (
+                    <p className="no-data">No subjects enrolled yet</p>
+                  ) : (
+                    <div className="table-container" style={{ marginTop: '0.5rem' }}>
+                      <table className="data-table">
+                        <thead>
+                          <tr>
+                            <th>Subject</th>
+                            <th>Teacher</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {studentEnrolledSubjects.map((sub) => (
+                            <tr key={sub.id}>
+                              <td>{sub.subject_name}</td>
+                              <td>{sub.teacher_name || '—'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {dashboardView && (
                 <div className="card">
@@ -1250,8 +1339,67 @@ const [sectionForm, setSectionForm] = useState({ section_name: '', course_id: ''
                     );
                   })()}
                 </div>
-             </section>
-            )}
+            </section>
+          )}
+
+          {/* Edit Assignment Modal */}
+          {editingAssignment && (
+            <div className="modal-overlay">
+              <div className="modal">
+                <div className="modal-header">
+                  <h3>Edit Assignment</h3>
+                  <button className="modal-close" onClick={() => setEditingAssignment(null)}>×</button>
+                </div>
+                <form onSubmit={(e) => { e.preventDefault(); showConfirm('Update Assignment', `Update this assignment?`, () => updateAssignment()); }}>
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label>Teacher</label>
+                      <select
+                        value={editingAssignment.teacher_id}
+                        onChange={(e) => setEditingAssignment({ ...editingAssignment, teacher_id: Number(e.target.value) })}
+                        required
+                      >
+                        <option value="">Select teacher</option>
+                        {[...teachers].sort((a, b) => `${a.first_name} ${a.last_name}`.localeCompare(`${b.first_name} ${b.last_name}`)).map((t) => (
+                          <option key={t.id} value={t.id}>{t.first_name} {t.last_name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <label>Subject</label>
+                      <select
+                        value={editingAssignment.subject_id}
+                        onChange={(e) => setEditingAssignment({ ...editingAssignment, subject_id: Number(e.target.value) })}
+                        required
+                      >
+                        <option value="">Select subject</option>
+                        {[...subjects].sort((a, b) => a.subject_name.localeCompare(b.subject_name)).map((s) => (
+                          <option key={s.id} value={s.id}>{s.subject_name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <label>Section</label>
+                      <select
+                        value={editingAssignment.section_id}
+                        onChange={(e) => setEditingAssignment({ ...editingAssignment, section_id: Number(e.target.value) })}
+                        required
+                      >
+                        <option value="">Select section</option>
+                        {[...sections].sort((a, b) => (a.course_code || '').localeCompare(b.course_code || '') || a.section_name.localeCompare(b.section_name)).map((sec) => (
+                          <option key={sec.id} value={sec.id}>{sec.course_code ? `${sec.course_code} ${sec.section_name}` : sec.section_name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                  <div className="modal-actions">
+                    <button type="button" className="btn-secondary" onClick={() => setEditingAssignment(null)}>Cancel</button>
+                    <button type="submit" className="btn-primary">Save Changes</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
 
             {/* Edit Course Modal */}
            {editingCourse && (
@@ -1747,8 +1895,16 @@ const [sectionForm, setSectionForm] = useState({ section_name: '', course_id: ''
                     </div>
                     <div className="form-group">
                       <label>Subjects</label>
+                      <input
+                        type="text"
+                        className="form-control"
+                        placeholder="Search subjects..."
+                        value={studentSubjectSearch}
+                        onChange={(e) => setStudentSubjectSearch(e.target.value)}
+                        style={{ marginBottom: '0.5rem' }}
+                      />
                       <div className="subject-checklist">
-                        {subjects.map((s) => (
+                        {subjects.filter(s => !studentSubjectSearch || s.subject_name.toLowerCase().includes(studentSubjectSearch.toLowerCase())).sort((a, b) => a.subject_name.localeCompare(b.subject_name)).map((s) => (
                           <label key={s.id} className="checkbox-label">
                             <input
                               type="checkbox"
@@ -1920,8 +2076,16 @@ const [sectionForm, setSectionForm] = useState({ section_name: '', course_id: ''
                         </div>
                         <div className="form-group">
                           <label>Subjects</label>
+                          <input
+                            type="text"
+                            className="form-control"
+                            placeholder="Search subjects..."
+                            value={editStudentSubjectSearch}
+                            onChange={(e) => setEditStudentSubjectSearch(e.target.value)}
+                            style={{ marginBottom: '0.5rem' }}
+                          />
                           <div className="subject-checklist">
-                            {subjects.map((sub) => (
+                            {subjects.filter(sub => !editStudentSubjectSearch || sub.subject_name.toLowerCase().includes(editStudentSubjectSearch.toLowerCase())).sort((a, b) => a.subject_name.localeCompare(b.subject_name)).map((sub) => (
                               <label key={sub.id} className="checkbox-label">
                                 <input
                                   type="checkbox"
@@ -2026,7 +2190,7 @@ const [sectionForm, setSectionForm] = useState({ section_name: '', course_id: ''
                         required
                       >
                         <option value="">Select teacher</option>
-                        {teachers.map((t) => (
+                        {[...teachers].sort((a, b) => `${a.first_name} ${a.last_name}`.localeCompare(`${b.first_name} ${b.last_name}`)).map((t) => (
                           <option key={t.id} value={t.id}>
                             {t.first_name} {t.last_name}
                           </option>
@@ -2041,7 +2205,7 @@ const [sectionForm, setSectionForm] = useState({ section_name: '', course_id: ''
                         required
                       >
                         <option value="">Select subject</option>
-                        {subjects.map((s) => (
+                        {[...subjects].sort((a, b) => a.subject_name.localeCompare(b.subject_name)).map((s) => (
                           <option key={s.id} value={s.id}>{s.subject_name}</option>
                         ))}
                       </select>
@@ -2054,8 +2218,8 @@ const [sectionForm, setSectionForm] = useState({ section_name: '', course_id: ''
                         required
                       >
                         <option value="">Select section</option>
-                        {sections.map((sec) => (
-                          <option key={sec.id} value={sec.id}>{sec.section_name}</option>
+                        {[...sections].sort((a, b) => (a.course_code || '').localeCompare(b.course_code || '') || a.section_name.localeCompare(b.section_name)).map((sec) => (
+                          <option key={sec.id} value={sec.id}>{sec.course_code ? `${sec.course_code} ${sec.section_name}` : sec.section_name}</option>
                         ))}
                       </select>
                     </div>
@@ -2100,21 +2264,32 @@ const [sectionForm, setSectionForm] = useState({ section_name: '', course_id: ''
                         const totalPages = Math.ceil(filtered.length / 10) || 1;
                         const page = Math.min(assignmentPage, totalPages);
                         const start = (page - 1) * 10;
-                        return filtered.slice(start, start + 10).map((a) => (
+                          return filtered.slice(start, start + 10).map((a) => {
+                          const sectionLabel = a.course_code ? `${a.course_code} ${a.section_name}` : a.section_name;
+                          return (
                           <tr key={a.id}>
                             <td>{a.teacher_name}</td>
                             <td>{a.subject_name}</td>
-                            <td>{a.section_name}</td>
+                            <td>{sectionLabel}</td>
                             <td>
-                              <button
-                                className="btn-sm btn-danger"
-                                onClick={() => showConfirm('Remove Assignment', `Remove ${a.teacher_name} from ${a.subject_name} - ${a.section_name}?`, () => deleteAssignment(a.id))}
-                              >
-                                Remove
-                              </button>
+                              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                <button
+                                  className="btn-sm btn-secondary"
+                                  onClick={() => setEditingAssignment({ ...a })}
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  className="btn-sm btn-danger"
+                                  onClick={() => showConfirm('Remove Assignment', `Remove ${a.teacher_name} from ${a.subject_name} - ${a.section_name}?`, () => deleteAssignment(a.id))}
+                                >
+                                  Remove
+                                </button>
+                              </div>
                             </td>
                           </tr>
-                        ));
+                          );
+                        });
                       })()}
                     </tbody>
                   </table>
@@ -2411,6 +2586,78 @@ const [sectionForm, setSectionForm] = useState({ section_name: '', course_id: ''
                         </div>
                       )}
                     </>
+                  );
+                })()}
+              </div>
+             </section>
+          )}
+
+          {/* Student: My Notifications */}
+          {user?.role === 'student' && activeTab === 'student-notifications' && (
+            <section className="form-section">
+              <h2>📩 My Notifications</h2>
+              <div className="card">
+                {studentEnrolledSubjects.length > 0 && (
+                  <div className="filter-bar" style={{ marginBottom: '1rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                    <button
+                      className={`tab ${studentSubjectFilter === 'all' ? 'active' : ''}`}
+                      onClick={() => setStudentSubjectFilter('all')}
+                    >
+                      All
+                    </button>
+                    {studentEnrolledSubjects.map((sub) => (
+                      <button
+                        key={sub.id}
+                        className={`tab ${studentSubjectFilter === sub.id ? 'active' : ''}`}
+                        onClick={() => setStudentSubjectFilter(sub.id)}
+                      >
+                        {sub.subject_name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {(() => {
+                  const filtered = studentSubjectFilter === 'all'
+                    ? studentNotifications
+                    : studentNotifications.filter(n => n.subject_id === studentSubjectFilter);
+                  return filtered.length === 0 ? (
+                    <p className="no-data">No notifications yet</p>
+                  ) : (
+                    <div className="table-container">
+                      <table className="data-table">
+                        <thead>
+                          <tr>
+                            <th>Title</th>
+                            <th>Message</th>
+                            <th>Subject</th>
+                            <th>Section</th>
+                            <th>Priority</th>
+                            <th>Date</th>
+                            <th>Status</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {filtered.map((n) => (
+                            <tr key={n.id} className={n.is_read ? '' : 'unread-row'} style={n.is_read ? {} : { fontWeight: 'bold', background: '#f0f7ff' }}>
+                              <td>{n.title}</td>
+                              <td>{n.message}</td>
+                              <td>{n.subject_name}</td>
+                              <td>{n.section_name}</td>
+                              <td>
+                                <span className={`priority-${n.priority?.toLowerCase()}`}>{n.priority}</span>
+                              </td>
+                              <td>{new Date(n.created_at).toLocaleString()}</td>
+                              <td>
+                                <span className={n.is_read ? 'status-read' : 'status-unread'}>{n.is_read ? 'Read' : 'Unread'}</span>
+                                <button className="btn-sm btn-secondary" style={{ marginLeft: '0.5rem' }} onClick={() => n.is_read ? markAsUnread(n.id) : markAsRead(n.id)}>
+                                  {n.is_read ? 'Mark Unread' : 'Mark Read'}
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   );
                 })()}
               </div>

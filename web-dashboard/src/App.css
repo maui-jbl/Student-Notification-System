@@ -789,3 +789,19 @@ button:disabled:hover {
   padding-top: 1rem;
   border-top: 1px solid var(--border-light);
 }
+
+.status-read {
+  color: #059669;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.status-unread {
+  color: #d97706;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.unread-row td {
+  font-weight: 600;
+}
