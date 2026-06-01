@@ -1,6 +1,7 @@
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import './App.css';
+import { setupPWA } from './pwa';
 
 const API = import.meta.env.VITE_API_URL || '/api';
 
@@ -43,9 +44,9 @@ function LandingPage({ onLoginClick }) {
               <p>Manage teachers, sections, and subjects with an intuitive dashboard</p>
             </div>
             <div className="feature-card">
-              <div className="feature-icon">📱</div>
-              <h3>Multi-Platform</h3>
-              <p>Access on web, mobile, and desktop with seamless synchronization</p>
+              <div className="feature-icon">🌐</div>
+              <h3>Web-Based</h3>
+              <p>Fully responsive — works on desktop, tablet, and phone browsers</p>
             </div>
             <div className="feature-card">
               <div className="feature-icon">📊</div>
@@ -159,6 +160,26 @@ function LoginPage({ onLoginSuccess, onBackClick }) {
 
 // Dashboard Component
 function Dashboard({ token, user, onLogout }) {
+  useEffect(() => {
+    const interceptor = axios.interceptors.response.use(
+      (res) => res,
+      (err) => {
+        if (err.response?.status === 401) {
+          onLogout();
+        }
+        return Promise.reject(err);
+      }
+    );
+    return () => axios.interceptors.response.eject(interceptor);
+  }, []);
+
+  useEffect(() => {
+    if (user?.role === 'student') {
+      const timer = setTimeout(() => setupPWA(token), 1500);
+      return () => clearTimeout(timer);
+    }
+  }, [token, user?.role]);
+
 const [teachers, setTeachers] = useState([]);
   const [sections, setSections] = useState([]);
   const [subjects, setSubjects] = useState([]);
@@ -238,6 +259,7 @@ const [sectionForm, setSectionForm] = useState({ section_name: '', course_id: ''
   const [historyStatusFilter, setHistoryStatusFilter] = useState('pending');
   const [courseForm, setCourseForm] = useState({ course_name: '', course_code: '' });
   const [editingCourse, setEditingCourse] = useState(null);
+  const [editingNotif, setEditingNotif] = useState(null);
   const [notifForm, setNotifForm] = useState({
     title: '',
     message: '',
@@ -817,8 +839,8 @@ const [sectionForm, setSectionForm] = useState({ section_name: '', course_id: ''
            )}
            {user?.role === 'student' && (
              <button
-               className={`tab ${activeTab === 'student-notifications' ? 'active' : ''}`}
-               onClick={() => setActiveTab('student-notifications')}
+                className={`tab ${activeTab === 'student-notifications' ? 'active' : ''}`}
+                onClick={() => { setActiveTab('student-notifications'); loadStudentData(); }}
              >
                📩 My Notifications
              </button>
@@ -2536,6 +2558,14 @@ const [sectionForm, setSectionForm] = useState({ section_name: '', course_id: ''
                                       ✓
                                     </button>
                                     <button
+                                      className="btn-sm"
+                                      title="Edit notification"
+                                      onClick={() => setEditingNotif({ ...h, scheduled_at: h.scheduled_at ? h.scheduled_at.slice(0, 16) : '' })}
+                                      style={{ marginRight: '0.5rem', background: '#3b82f6', color: 'white', border: 'none', padding: '4px 10px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.85rem' }}
+                                    >
+                                      ✎
+                                    </button>
+                                    <button
                                       className="btn-sm btn-danger"
                                       title="Cancel notification"
                                       onClick={async () => {
@@ -2595,7 +2625,9 @@ const [sectionForm, setSectionForm] = useState({ section_name: '', course_id: ''
           {/* Student: My Notifications */}
           {user?.role === 'student' && activeTab === 'student-notifications' && (
             <section className="form-section">
-              <h2>📩 My Notifications</h2>
+              <h2>📩 My Notifications
+                <button className="btn-sm" onClick={() => { loadStudentData(); notify('✓ Refreshed'); }} style={{ marginLeft: '1rem', verticalAlign: 'middle', minHeight: 'auto', padding: '4px 12px', fontSize: '0.85rem' }}>⟳ Refresh</button>
+              </h2>
               <div className="card">
                 {studentEnrolledSubjects.length > 0 && (
                   <div className="filter-bar" style={{ marginBottom: '1rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
@@ -2632,8 +2664,9 @@ const [sectionForm, setSectionForm] = useState({ section_name: '', course_id: ''
                             <th>Subject</th>
                             <th>Section</th>
                             <th>Priority</th>
-                            <th>Date</th>
-                            <th>Status</th>
+                             <th>Scheduled</th>
+                             <th>Sent</th>
+                             <th>Status</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -2646,6 +2679,7 @@ const [sectionForm, setSectionForm] = useState({ section_name: '', course_id: ''
                               <td>
                                 <span className={`priority-${n.priority?.toLowerCase()}`}>{n.priority}</span>
                               </td>
+                              <td>{n.scheduled_at ? new Date(n.scheduled_at).toLocaleString() : '—'}</td>
                               <td>{new Date(n.created_at).toLocaleString()}</td>
                               <td>
                                 <span className={n.is_read ? 'status-read' : 'status-unread'}>{n.is_read ? 'Read' : 'Unread'}</span>
@@ -2665,6 +2699,81 @@ const [sectionForm, setSectionForm] = useState({ section_name: '', course_id: ''
           )}
         </div>
       </div>
+
+      {editingNotif && (
+        <div className="modal-overlay">
+          <div className="modal">
+            <div className="modal-header">
+              <h3>✎ Edit Notification</h3>
+              <button className="modal-close" onClick={() => setEditingNotif(null)}>×</button>
+            </div>
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              try {
+                await axios.put(
+                  `${API}/teacher/notifications/${editingNotif.id}/edit`,
+                  {
+                    title: editingNotif.title,
+                    message: editingNotif.message,
+                    priority: editingNotif.priority,
+                    scheduled_at: editingNotif.scheduled_at || null,
+                  },
+                  { headers }
+                );
+                notify('✓ Notification updated');
+                setEditingNotif(null);
+                loadTeacherData();
+              } catch (err) {
+                notify('Failed to update: ' + (err.response?.data?.message || err.message));
+              }
+            }}>
+              <div className="form-group">
+                <label>Title</label>
+                <input
+                  type="text"
+                  value={editingNotif.title || ''}
+                  onChange={(e) => setEditingNotif({ ...editingNotif, title: e.target.value })}
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label>Message</label>
+                <textarea
+                  value={editingNotif.message || ''}
+                  onChange={(e) => setEditingNotif({ ...editingNotif, message: e.target.value })}
+                  required
+                />
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Priority</label>
+                  <select
+                    value={editingNotif.priority || 'Normal'}
+                    onChange={(e) => setEditingNotif({ ...editingNotif, priority: e.target.value })}
+                  >
+                    <option>Normal</option>
+                    <option>Urgent</option>
+                    <option>Exam</option>
+                    <option>Event</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Schedule For (Optional)</label>
+                  <input
+                    type="datetime-local"
+                    value={editingNotif.scheduled_at || ''}
+                    onChange={(e) => setEditingNotif({ ...editingNotif, scheduled_at: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div className="modal-actions">
+                <button type="button" className="btn-secondary" onClick={() => setEditingNotif(null)}>Cancel</button>
+                <button type="submit" className="btn-primary">Save Changes</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {confirmModal.show && (
         <div className="modal-overlay">
@@ -2710,6 +2819,9 @@ function App() {
     setToken(newToken);
     setUser(newUser);
     setCurrentPage('dashboard');
+    if (newUser.role === 'student') {
+      setTimeout(() => setupPWA(newToken), 1000);
+    }
   };
 
   const handleLogout = () => {
@@ -2718,6 +2830,25 @@ function App() {
     setUser(null);
     setCurrentPage('landing');
   };
+
+  useEffect(() => {
+    const handleStorageChange = (e) => {
+      if (e.key === 'token' && !e.newValue) {
+        handleLogout();
+      }
+    };
+    const handleVisibilityChange = () => {
+      if (!document.hidden && !localStorage.getItem('token')) {
+        handleLogout();
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, []);
 
   // If already logged in, show dashboard
   if (token && user) {

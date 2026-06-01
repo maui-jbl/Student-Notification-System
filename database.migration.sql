@@ -28,3 +28,15 @@ UPDATE users SET first_name='Student', last_name='Two', middle_initial=NULL WHER
 
 -- Remove old column
 ALTER TABLE users DROP COLUMN name;
+
+-- Add push_subscriptions table for Web Push (PWA)
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT NOT NULL,
+  endpoint TEXT NOT NULL,
+  p256dh TEXT NOT NULL,
+  auth TEXT NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_user_sub (user_id),
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);

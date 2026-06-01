@@ -116,8 +116,9 @@ button {
   cursor: pointer;
   transition: all 0.3s ease;
   text-transform: none;
-  min-height: auto;
+  min-height: 44px;
   width: auto;
+  -webkit-tap-highlight-color: transparent;
 }
 
 button.btn-primary {
@@ -163,10 +164,10 @@ input,
 textarea,
 select {
   width: 100%;
-  padding: 12px 16px;
+  padding: 14px 16px;
   border: 2px solid var(--border-light);
   border-radius: 8px;
-  font-size: 1rem;
+  font-size: 16px;
   font-family: inherit;
   color: var(--text-dark);
   background: var(--bg-light);
@@ -289,18 +290,18 @@ li {
   color: #164e63;
 }
 
-/* Responsive */
+/* Responsive Typography */
 @media (max-width: 768px) {
-  h1 {
-    font-size: 2rem;
-  }
-  
-  h2 {
-    font-size: 1.5rem;
-  }
-  
-  nav .nav-links {
-    gap: 1rem;
-    font-size: 0.9rem;
-  }
+  h1 { font-size: 1.8rem; }
+  h2 { font-size: 1.4rem; }
+  h3 { font-size: 1.2rem; }
+
+  nav { padding: 0.75rem 1rem; }
+  nav .nav-links { gap: 1rem; font-size: 0.9rem; }
+}
+
+@media (max-width: 480px) {
+  h1 { font-size: 1.5rem; }
+  h2 { font-size: 1.25rem; }
+  h3 { font-size: 1.1rem; }
 }

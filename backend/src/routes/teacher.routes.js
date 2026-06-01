@@ -96,6 +96,34 @@ router.get('/notifications/history', async (req, res) => {
   res.json(rows);
 });
 
+router.put('/notifications/:id/edit', async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      `SELECT id, status FROM notifications WHERE id=? AND sender_id=?`,
+      [req.params.id, req.user.id]
+    );
+    if (!rows.length) return res.status(404).json({ message: 'Notification not found' });
+    if (rows[0].status !== 'pending' && rows[0].status !== 'scheduled') {
+      return res.status(400).json({ message: 'Only pending or scheduled notifications can be edited' });
+    }
+
+    const { title, message, priority, scheduled_at } = req.body;
+    if (!title || !message) {
+      return res.status(400).json({ message: 'Title and message are required' });
+    }
+
+    await pool.query(
+      `UPDATE notifications SET title=?, message=?, priority=?, scheduled_at=? WHERE id=?`,
+      [title, message, priority || 'Normal', scheduled_at || null, req.params.id]
+    );
+
+    const [updated] = await pool.query('SELECT * FROM notifications WHERE id=?', [req.params.id]);
+    res.json({ message: 'Notification updated', notification: updated[0] });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
 router.put('/notifications/:id/cancel', async (req, res) => {
   try {
     const [rows] = await pool.query(

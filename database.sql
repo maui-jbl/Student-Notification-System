@@ -59,6 +59,17 @@ CREATE TABLE IF NOT EXISTS teacher_subject_sections (
   FOREIGN KEY (section_id) REFERENCES sections(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT NOT NULL,
+  endpoint TEXT NOT NULL,
+  p256dh TEXT NOT NULL,
+  auth TEXT NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_user_sub (user_id),
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS fcm_tokens (
   id INT AUTO_INCREMENT PRIMARY KEY,
   student_id INT NOT NULL,

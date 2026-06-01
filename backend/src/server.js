@@ -1,6 +1,8 @@
+const dotenv = require('dotenv');
+dotenv.config();
+
 const express = require('express');
 const cors = require('cors');
-const dotenv = require('dotenv');
 const pool = require('./config/db');
 const { mqttClient } = require('./config/mqtt');
 const { startScheduler } = require('./jobs/scheduler');
@@ -9,8 +11,8 @@ const authRoutes = require('./routes/auth.routes');
 const adminRoutes = require('./routes/admin.routes');
 const teacherRoutes = require('./routes/teacher.routes');
 const studentRoutes = require('./routes/student.routes');
+const pushRoutes = require('./routes/push.routes');
 
-dotenv.config();
 const app = express();
 
 app.use(cors());
@@ -30,6 +32,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/teacher', teacherRoutes);
 app.use('/api/student', studentRoutes);
+app.use('/api/push', pushRoutes);
 
 startScheduler();
 

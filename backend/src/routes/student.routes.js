@@ -28,7 +28,7 @@ router.get('/notifications', async (req, res) => {
      JOIN sections sec ON sec.id=n.section_id
      JOIN student_subjects ss ON ss.subject_id=n.subject_id AND ss.student_id=?
      LEFT JOIN notification_reads nr ON nr.notification_id=n.id AND nr.student_id=?
-     WHERE n.section_id=? AND (n.status='sent' OR n.status='delivered')
+      WHERE n.section_id=? AND (n.status='pending' OR n.status='scheduled' OR n.status='sent' OR n.status='delivered')
      ORDER BY n.created_at DESC`,
     [req.user.id, req.user.id, req.user.section_id]
   );
