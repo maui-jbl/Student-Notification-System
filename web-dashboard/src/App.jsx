@@ -260,6 +260,9 @@ const [sectionForm, setSectionForm] = useState({ section_name: '', course_id: ''
   const [courseForm, setCourseForm] = useState({ course_name: '', course_code: '' });
   const [editingCourse, setEditingCourse] = useState(null);
   const [editingNotif, setEditingNotif] = useState(null);
+  const [adminNotifications, setAdminNotifications] = useState([]);
+  const [adminNotifStats, setAdminNotifStats] = useState({ pending: 0, completed: 0, cancelled: 0 });
+  const [adminNotifFilter, setAdminNotifFilter] = useState('all');
   const [notifForm, setNotifForm] = useState({
     title: '',
     message: '',
@@ -273,18 +276,22 @@ const [sectionForm, setSectionForm] = useState({ section_name: '', course_id: ''
 
   const loadAdminData = async () => {
     try {
-      const [t, s, sub, c, stud] = await Promise.all([
+      const [t, s, sub, c, stud, notifStats, notifs] = await Promise.all([
         axios.get(`${API}/admin/teachers`, { headers }),
         axios.get(`${API}/admin/sections`, { headers }),
         axios.get(`${API}/admin/subjects`, { headers }),
         axios.get(`${API}/admin/courses`, { headers }),
         axios.get(`${API}/admin/students`, { headers }),
+        axios.get(`${API}/admin/notifications/stats`, { headers }),
+        axios.get(`${API}/admin/notifications`, { headers }),
       ]);
       setTeachers(t.data);
       setSections(s.data);
       setSubjects(sub.data);
       setCourses(c.data);
       setStudents(stud.data);
+      setAdminNotifStats(notifStats.data);
+      setAdminNotifications(notifs.data);
     } catch (err) {
       console.error('loadAdminData error:', err.response?.data || err.message);
       notify('Failed to load data: ' + (err.response?.data?.message || err.message));
@@ -891,6 +898,13 @@ const [sectionForm, setSectionForm] = useState({ section_name: '', course_id: ''
                         <p className="stat-value">{students.length}</p>
                       </div>
                     </div>
+                    <div className="stat-card" style={{ cursor: 'pointer' }} onClick={() => { setDashboardView(dashboardView === 'notifications' ? null : 'notifications'); setDetailSearch(''); setDetailPage(1); setAdminNotifFilter('all'); }}>
+                      <div className="stat-icon">📢</div>
+                      <div className="stat-content">
+                        <p className="stat-label">Notifications</p>
+                        <p className="stat-value">{adminNotifStats.pending + adminNotifStats.completed + adminNotifStats.cancelled}</p>
+                      </div>
+                    </div>
                   </>
                 )}
                 {user?.role === 'teacher' && (
@@ -961,11 +975,12 @@ const [sectionForm, setSectionForm] = useState({ section_name: '', course_id: ''
                     {dashboardView === 'my-sections' && '📚 My Sections'}
                     {dashboardView === 'my-subjects' && '🎓 My Subjects'}
                     {dashboardView === 'sent-notifications' && '📢 Sent Notifications'}
+                    {dashboardView === 'notifications' && '📢 Notifications'}
                   </h3>
                   <input
                     type="text"
                     className="form-control search-input"
-                    placeholder={`Search ${dashboardView === 'sent-notifications' ? 'notifications' : dashboardView === 'my-sections' ? 'sections' : dashboardView === 'my-subjects' ? 'subjects' : dashboardView}...`}
+                    placeholder={`Search ${dashboardView === 'sent-notifications' || dashboardView === 'notifications' ? 'notifications' : dashboardView === 'my-sections' ? 'sections' : dashboardView === 'my-subjects' ? 'subjects' : dashboardView}...`}
                     value={detailSearch}
                     onChange={(e) => { setDetailSearch(e.target.value); setDetailPage(1); }}
                   />
@@ -979,12 +994,34 @@ const [sectionForm, setSectionForm] = useState({ section_name: '', course_id: ''
                     else if (dashboardView === 'my-sections') data = sections.filter(s => !detailSearch || (s.section_name||'').toLowerCase().includes(detailSearch.toLowerCase()));
                     else if (dashboardView === 'my-subjects') data = subjects.filter(s => !detailSearch || (s.subject_name||'').toLowerCase().includes(detailSearch.toLowerCase()));
                     else if (dashboardView === 'sent-notifications') data = history.filter(h => !detailSearch || (h.title||'').toLowerCase().includes(detailSearch.toLowerCase()) || (h.section_name||'').toLowerCase().includes(detailSearch.toLowerCase()) || (h.subject_name||'').toLowerCase().includes(detailSearch.toLowerCase()));
+                    else if (dashboardView === 'notifications') data = adminNotifications.filter(n => {
+                      if (adminNotifFilter !== 'all') {
+                        if (adminNotifFilter === 'pending' && n.status !== 'pending' && n.status !== 'scheduled') return false;
+                        if (adminNotifFilter === 'completed' && n.status !== 'sent' && n.status !== 'delivered') return false;
+                        if (adminNotifFilter === 'cancelled' && n.status !== 'cancelled') return false;
+                      }
+                      return !detailSearch || (n.title||'').toLowerCase().includes(detailSearch.toLowerCase()) || (n.section_name||'').toLowerCase().includes(detailSearch.toLowerCase()) || (n.subject_name||'').toLowerCase().includes(detailSearch.toLowerCase()) || (n.teacher_name||'').toLowerCase().includes(detailSearch.toLowerCase());
+                    });
                     const totalPages = Math.ceil(data.length / pageSize) || 1;
                     const page = Math.min(detailPage, totalPages);
                     const start = (page - 1) * pageSize;
                     const paged = data.slice(start, start + pageSize);
                     return (
                       <>
+                        {dashboardView === 'notifications' && (
+                          <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                            {['all', 'pending', 'completed', 'cancelled'].map(f => (
+                              <button key={f} className="btn" style={{
+                                padding: '0.3rem 0.75rem', fontSize: '0.85rem',
+                                background: adminNotifFilter === f ? 'var(--primary)' : 'var(--bg-card)',
+                                color: adminNotifFilter === f ? '#fff' : 'inherit',
+                                border: '1px solid var(--border)', borderRadius: '6px', cursor: 'pointer'
+                              }} onClick={() => { setAdminNotifFilter(f); setDetailPage(1); }}>
+                                {f === 'all' ? 'All' : f.charAt(0).toUpperCase() + f.slice(1)}
+                              </button>
+                            ))}
+                          </div>
+                        )}
                         <table className="data-table">
                           <thead>
                             <tr>
@@ -997,6 +1034,7 @@ const [sectionForm, setSectionForm] = useState({ section_name: '', course_id: ''
                               {dashboardView === 'my-sections' && <><th>Section Name</th></>}
                               {dashboardView === 'my-subjects' && <><th>Subject Name</th></>}
                               {dashboardView === 'sent-notifications' && <><th>Title</th><th>Section / Subject</th><th>Priority</th><th>Date Sent</th><th>Scheduled</th><th>Status</th></>}
+                              {dashboardView === 'notifications' && <><th>Title</th><th>Teacher</th><th>Section / Subject</th><th>Priority</th><th>Date Sent</th><th>Status</th></>}
                             </tr>
                           </thead>
                           <tbody>
@@ -1008,7 +1046,8 @@ const [sectionForm, setSectionForm] = useState({ section_name: '', course_id: ''
                               dashboardView === 'students' ? paged.map(s => <tr key={s.id}><td>{s.id}</td><td>{[s.first_name, s.middle_initial? s.middle_initial+'.' : '', s.last_name].filter(Boolean).join(' ')}</td><td>{s.email}</td><td>{s.usn || '—'}</td><td>{s.section_name || '—'}</td><td>{s.subjects || '—'}</td></tr>) :
                               dashboardView === 'my-sections' ? paged.map(s => <tr key={s.id}><td>{s.id}</td><td>{s.section_name}</td></tr>) :
                               dashboardView === 'my-subjects' ? paged.map(s => <tr key={s.id}><td>{s.id}</td><td>{s.subject_name}</td></tr>) :
-                              dashboardView === 'sent-notifications' ? paged.map(h => <tr key={h.id}><td>{h.id}</td><td>{h.title}</td><td>{h.section_name} / {h.subject_name}</td><td><span className={`priority-badge priority-${h.priority.toLowerCase()}`}>{h.priority}</span></td><td>{new Date(h.created_at).toLocaleString()}</td><td>{h.scheduled_at ? new Date(h.scheduled_at).toLocaleString() : '—'}</td><td>{h.status === 'scheduled' && <span className="priority-badge priority-exam">Scheduled</span>}{h.status === 'pending' && <span className="priority-badge priority-exam">Pending</span>}{h.status === 'sent' && <span className="priority-badge priority-normal">Sent</span>}{h.status === 'delivered' && <span className="priority-badge priority-success">Delivered</span>}{h.status === 'cancelled' && <span className="priority-badge priority-urgent">Cancelled</span>}</td></tr>) : null
+                              dashboardView === 'sent-notifications' ? paged.map(h => <tr key={h.id}><td>{h.id}</td><td>{h.title}</td><td>{h.section_name} / {h.subject_name}</td><td><span className={`priority-badge priority-${h.priority.toLowerCase()}`}>{h.priority}</span></td><td>{new Date(h.created_at).toLocaleString()}</td><td>{h.scheduled_at ? new Date(h.scheduled_at).toLocaleString() : '—'}</td><td>{h.status === 'scheduled' && <span className="priority-badge priority-exam">Scheduled</span>}{h.status === 'pending' && <span className="priority-badge priority-exam">Pending</span>}{h.status === 'sent' && <span className="priority-badge priority-normal">Sent</span>}{h.status === 'delivered' && <span className="priority-badge priority-success">Delivered</span>}{h.status === 'cancelled' && <span className="priority-badge priority-urgent">Cancelled</span>}</td></tr>) :
+                              dashboardView === 'notifications' ? paged.map(n => <tr key={n.id}><td>{n.id}</td><td>{n.title}</td><td>{n.teacher_name}</td><td>{n.section_name} / {n.subject_name}</td><td><span className={`priority-badge priority-${n.priority.toLowerCase()}`}>{n.priority}</span></td><td>{new Date(n.created_at).toLocaleString()}</td><td>{n.status === 'pending' || n.status === 'scheduled' ? <span className="priority-badge priority-exam">Pending</span> : n.status === 'sent' || n.status === 'delivered' ? <span className="priority-badge priority-normal">Sent</span> : <span className="priority-badge priority-urgent">Cancelled</span>}</td></tr>) : null
                             ) : (
                               <tr><td colSpan={10}><p className="no-data">No results</p></td></tr>
                             )}

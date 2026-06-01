@@ -547,4 +547,43 @@ router.get('/teachers/:id/assignments', async (req, res) => {
   }
 });
 
+// Notifications (admin view all)
+router.get('/notifications/stats', async (_req, res) => {
+  try {
+    const [rows] = await pool.query(`
+      SELECT
+        SUM(status='pending' OR status='scheduled') AS pending,
+        SUM(status='sent' OR status='delivered') AS completed,
+        SUM(status='cancelled') AS cancelled
+      FROM notifications
+    `);
+    res.json({
+      pending: Number(rows[0].pending || 0),
+      completed: Number(rows[0].completed || 0),
+      cancelled: Number(rows[0].cancelled || 0),
+    });
+  } catch (error) {
+    console.error('Get notification stats error:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+router.get('/notifications', async (_req, res) => {
+  try {
+    const [rows] = await pool.query(`
+      SELECT n.*, s.subject_name, sec.section_name,
+             CONCAT(u.first_name, ' ', u.last_name) AS teacher_name
+      FROM notifications n
+      JOIN subjects s ON s.id=n.subject_id
+      JOIN sections sec ON sec.id=n.section_id
+      JOIN users u ON u.id=n.sender_id
+      ORDER BY n.created_at DESC
+    `);
+    res.json(rows);
+  } catch (error) {
+    console.error('Get all notifications error:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
 module.exports = router;
